@@ -5,7 +5,7 @@ from qdrant_client.models import PointStruct
 from qdrant_client.models import Filter
 
 
-VECTOR_SIZE = 4
+VECTOR_SIZE = 384
 
 
 def create_collection():
