@@ -1,5 +1,4 @@
 from fastapi import APIRouter, UploadFile, File
-
 from app.schemas.document import UploadResponse
 from app.services.document_service import process_document
 
