@@ -5,13 +5,13 @@ MODEL_NAME = "BAAI/bge-small-en-v1.5"
 model = SentenceTransformer(MODEL_NAME)
 
 
-def embed(text: str) -> list[float]:
+def embed_text(text: str) -> list[float]:
     """
-    Convert text into an embedding vector.
+    Generate a normalized embedding for a text chunk.
     """
-    vector = model.encode(
+    embedding = model.encode(
         text,
         normalize_embeddings=True
     )
 
-    return vector.tolist()
+    return embedding.tolist()

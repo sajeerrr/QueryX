@@ -9,4 +9,5 @@ class ChunkResponse(BaseModel):
 class UploadResponse(BaseModel):
     filename: str
     chunk_count: int
+    indexed_chunks: int
     chunks: list[ChunkResponse]

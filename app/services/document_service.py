@@ -3,6 +3,7 @@ from pathlib import Path
 from app.rag.chunker import chunk_text
 from app.utils.pdf import extract_text
 from app.utils.text import clean_text
+from app.rag.indexer import index_document
 
 
 UPLOAD_DIR = Path("uploads")
@@ -20,9 +21,12 @@ def process_document(filename: str, data: bytes):
 
     chunks = chunk_text(text)
 
+    indexed = index_document(filename, chunks)
+
     return {
         "filename": filename,
         "chunk_count": len(chunks),
+        "indexed_chunks": indexed,
         "chunks": [
             {
                 "id": i + 1,
