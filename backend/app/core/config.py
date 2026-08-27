@@ -16,3 +16,11 @@ COLLECTION_NAME = os.getenv(
 API_KEY = os.getenv("API_KEY")
 
 CHAT_MODEL = os.getenv("CHAT_MODEL")
+
+
+#for hybrid search
+RERANK_TOP_K = 5
+
+HYBRID_TOP_K = 20
+
+RERANK_THRESHOLD = 0.2

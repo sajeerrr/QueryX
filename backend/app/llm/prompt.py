@@ -1,26 +1,44 @@
-def build_prompt(question: str, contexts: list[dict]) -> str:
+def build_prompt(question: str, chunks: list[dict]) -> str:
 
     """
     Build the RAG prompt.
     """
 
-    context = "\n\n".join(
-        [
-            f"[Chunk {c.chunk_id}]\n{c.text}"
-            for c in contexts
-        ]
-    )
+    context = []
+
+    for chunk in chunks:
+
+        context.append(
+
+            f"""
+    Source: {chunk.filename}
+    Chunk: {chunk.chunk_id}
+
+    {chunk.text}
+    """
+
+        )
+
+    context = "\n\n".join(context)
 
     return f"""
-Answer the question ONLY using the supplied context.
+You are QueryX.
 
-Context:
+Answer ONLY using the provided context.
+
+If the answer cannot be found, say:
+
+"I couldn't find this information in the uploaded documents."
+
+Never invent information.
+
+========================
 
 {context}
+
+========================
 
 Question:
 
 {question}
-
-Answer:
 """

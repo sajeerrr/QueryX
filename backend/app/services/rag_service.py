@@ -1,4 +1,4 @@
-from app.rag.pipeline import pipeline
+from app.rag.pipeline.pipeline import pipeline
 
 
 def ask_question(question: str):

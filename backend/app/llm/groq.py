@@ -1,8 +1,5 @@
 from openai import OpenAI
-
-# from app.core.config import settings
 from app.core.config import API_KEY, CHAT_MODEL
-
 
 client = OpenAI(
     api_key=API_KEY,
@@ -10,28 +7,24 @@ client = OpenAI(
 )
 
 
-def generate(prompt: str) -> str:
-    """
-    Generate an answer using Groq.
-    """
+def generate(
+    prompt: str,
+    system_prompt: str,
+) -> str:
 
     response = client.chat.completions.create(
         model=CHAT_MODEL,
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You are QueryX, a retrieval augmented AI assistant. "
-                    "Answer ONLY using the provided context. "
-                    "If the answer isn't present, say you don't know."
-                )
+                "content": system_prompt,
             },
             {
                 "role": "user",
-                "content": prompt
-            }
+                "content": prompt,
+            },
         ],
         temperature=0,
     )
 
-    return response.choices[0].message.content
+    return response.choices[0].message.content.strip()
