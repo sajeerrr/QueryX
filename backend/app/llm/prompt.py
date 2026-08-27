@@ -1,14 +1,12 @@
-def build_prompt(
-    question: str,
-    contexts: list[dict],
-) -> str:
+def build_prompt(question: str, contexts: list[dict]) -> str:
+
     """
     Build the RAG prompt.
     """
 
     context = "\n\n".join(
         [
-            f"[Chunk {c['chunk_id']}]\n{c['text']}"
+            f"[Chunk {c.chunk_id}]\n{c.text}"
             for c in contexts
         ]
     )

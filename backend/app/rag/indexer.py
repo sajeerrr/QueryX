@@ -1,10 +1,13 @@
 import uuid
+from datetime import datetime
 
 from qdrant_client.models import PointStruct
 
 from app.core.config import COLLECTION_NAME
 from app.db.qdrant import client
 from app.rag.embeddings import embed_text
+from app.rag.bm25_index import bm25_index
+
 
 
 def index_document(filename: str, chunks: list[str]):
@@ -25,10 +28,16 @@ def index_document(filename: str, chunks: list[str]):
                 id=str(uuid.uuid4()),
                 vector=vector,
                 payload={
-                    "document_id":document_id,
+                    "document_id": document_id,
                     "filename": filename,
                     "chunk_id": chunk_id,
-                    "text": chunk
+                    "text": chunk,
+
+                    "collection": "default",
+                    "created_at": datetime.utcnow().isoformat(),
+
+                    "page": None,
+                    "source": filename
                 }
             )
         )
@@ -37,6 +46,8 @@ def index_document(filename: str, chunks: list[str]):
         collection_name=COLLECTION_NAME,
         points=points
     )
+    
+    bm25_index.rebuild()
 
     return {
         "document_id": document_id,

@@ -1,5 +1,8 @@
-from rag.embeddings import embed
+from app.rag.bm25_index import bm25_index
 
-vector = embed("Hello QueryX")
-
-print(len(vector))
+print(
+    bm25_index.search(
+        "AI agent security",
+        3
+    )
+)

@@ -7,6 +7,7 @@ from app.api.search import router as search_router
 from app.api.upload import router as upload_router
 from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
+from app.rag.bm25_index import bm25_index
 
 
 app = FastAPI(
@@ -40,8 +41,15 @@ async def root():
         "message": "Production RAG API"
     }
 
+
 @app.get("/health")
 async def health():
     return {
         "status": "healthy"
     }
+
+
+@app.on_event("startup")
+async def startup():
+
+    bm25_index.rebuild()

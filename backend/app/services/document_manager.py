@@ -20,7 +20,6 @@ def list_documents():
     for point in response[0]:
 
         payload = point.payload
-
         doc_id = payload["document_id"]
 
         if doc_id not in documents:
