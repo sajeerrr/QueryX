@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QueryX</title>
+
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+<div class="app">
+
+    <aside class="sidebar">
+
+        <h1>QueryX</h1>
+
+        <input
+            type="file"
+            id="fileInput"
+            accept=".pdf"
+        >
+
+        <button id="uploadBtn">
+            Upload
+        </button>
+
+        <div id="documents">
+
+        </div>
+
+    </aside>
+
+    <main class="chat">
+
+        <div id="messages" class="messages">
+
+            <div class="message ai">
+                <div class="bubble">
+                    👋 Welcome to QueryX.
+                    <br><br>
+                    Upload a PDF and ask questions about it.
+                </div>
+            </div>
+
+        </div>
+
+        <div class="input-area">
+
+            <input
+                id="question"
+                type="text"
+                placeholder="Ask anything about your documents..."
+                autocomplete="off"
+            >
+
+            <button id="sendBtn">
+                Send
+            </button>
+
+        </div>
+
+    </main>
+
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/upload.js"></script>
+<script src="js/chat.js"></script>
+<script src="js/documents.js"></script>
+
+</body>
+</html>
