@@ -1,68 +1,26 @@
-const documentContainer = document.getElementById("documents");
+/* documents.js — Load existing documents from API and sync with file list */
 
 async function loadDocuments() {
-
-    documentContainer.innerHTML = "Loading...";
-
     try {
         const docs = await getDocuments();
-        documentContainer.innerHTML = "";
+        if (docs && docs.length > 0) {
+            // Sync server documents into local state
+            uploadedFiles = docs.map(d => ({
+                name: d.filename || d.name,
+                chunks: d.indexed_chunks || d.chunks || '—',
+                id: d.id || null
+            }));
+            renderFileList();
 
-        if (docs.length === 0) {
-            documentContainer.innerHTML = "<p>No documents uploaded.</p>";
-            return;
+            // Auto-select first document and show chat
+            showView('Chat');
+            addWelcomeAfterUpload(uploadedFiles[0].name);
         }
-
-        docs.forEach(doc => {
-
-            const card = document.createElement("div");
-            card.className = "document-card";
-
-            card.innerHTML = `
-                <div class="document-name">
-                    ${doc.filename}
-                </div>
-
-                <div class="document-meta">
-                    ${doc.chunks} chunks
-                </div>
-
-                <button
-                    class="delete-btn"
-                    data-id="${doc.document_id}"
-                >
-                    Delete
-                </button>
-            `;
-
-            documentContainer.appendChild(card);
-        });
-
-        addDeleteEvents();
-
-    } catch (error) {
-
-        console.error(error);
-        documentContainer.innerHTML =
-            "<p>Unable to load documents.</p>";
+    } catch (e) {
+        // Server might not be running — silently fail
+        console.log("loadDocuments: server not reachable", e.message);
     }
 }
 
-
-function addDeleteEvents() {
-
-    const buttons =
-        document.querySelectorAll(".delete-btn");
-
-    buttons.forEach(button => {
-
-        button.addEventListener("click", async () => {
-            const id = button.dataset.id;
-            if (!confirm("Delete this document?"))
-                return;
-
-            await deleteDocument(id);
-            loadDocuments();
-        });
-    });
-}
+// Run after DOM is ready (scripts load at end of body)
+loadDocuments();
