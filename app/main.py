@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.services.qdrant_service import create_collection
 from app.api.search import router as search_router
 from app.api.upload import router as upload_router
+from app.api.chat import router as chat_router
 
 
 app = FastAPI(
@@ -20,6 +21,7 @@ app.add_middleware(
 
 app.include_router(upload_router, prefix="/api")
 app.include_router(search_router, prefix="/api", tags=["Search"],)
+app.include_router(chat_router)
 
 
 @app.on_event("startup")

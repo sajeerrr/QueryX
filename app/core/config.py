@@ -13,6 +13,6 @@ COLLECTION_NAME = os.getenv(
     "queryx_documents"
 )
 
-XAI_API_KEY = os.getenv("XAI_API_KEY")
+API_KEY = os.getenv("API_KEY")
 
 CHAT_MODEL = os.getenv("CHAT_MODEL")

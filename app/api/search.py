@@ -1,11 +1,13 @@
-from fastapi import APIRouter
-from app.rag.retriever import retrieve
+from fastapi import APIRouter, Query
+from app.services.search_service import search_documents
+from app.schemas.search import SearchResponse
 
 
 router = APIRouter()
 
 
-@router.get("/search")
-def search(query: str):
-
-    return retrieve(query)
+@router.get("/search", response_model=SearchResponse)
+async def search(
+    query: str = Query(..., min_length=2)
+):
+    return search_documents(query)
