@@ -23,6 +23,7 @@ def retrieve(
     return [
         {
             "score": point.score,
+            "document_id": point.payload["document_id"], 
             "chunk_id": point.payload["chunk_id"],
             "filename": point.payload["filename"],
             "text": point.payload["text"],

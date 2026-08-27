@@ -7,13 +7,12 @@ from app.db.qdrant import client
 from app.rag.embeddings import embed_text
 
 
-def index_document(
-    filename: str,
-    chunks: list[str]
-):
+def index_document(filename: str, chunks: list[str]):
     """
     Generate embeddings and store them in Qdrant.
     """
+
+    document_id = str(uuid.uuid4()) 
 
     points = []
 
@@ -26,6 +25,7 @@ def index_document(
                 id=str(uuid.uuid4()),
                 vector=vector,
                 payload={
+                    "document_id":document_id,
                     "filename": filename,
                     "chunk_id": chunk_id,
                     "text": chunk
@@ -38,4 +38,7 @@ def index_document(
         points=points
     )
 
-    return len(points)
+    return {
+        "document_id": document_id,
+        "indexed_chunks": len(points)
+    }
