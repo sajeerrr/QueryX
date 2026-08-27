@@ -34,6 +34,7 @@ document.getElementById("uploadBtn").addEventListener("click", async () => {
 
         // Add to uploaded files list and re-render
         uploadedFiles.push({
+            id: result.document_id,
             name: result.filename,
             chunks: result.indexed_chunks
         });

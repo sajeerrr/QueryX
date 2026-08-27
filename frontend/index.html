@@ -225,9 +225,28 @@ function renderFileList() {
             addWelcomeAfterUpload(file.name);
         });
 
-        card.querySelector('.file-bubble-delete').addEventListener('click', () => {
+        card.querySelector('.file-bubble-delete').addEventListener('click', async () => {
+            const wasActive = card.classList.contains('active');
+            const fileName = file.name;
+
+            // Call backend to permanently delete from server
+            try {
+                await deleteDocument(file.id);
+            } catch (err) {
+                console.error('Delete API error:', err);
+                showToast('Failed to delete from server.', 'error');
+            }
+
+            // Remove from local state and re-render
             uploadedFiles.splice(i, 1);
             renderFileList();
+            showToast(`"${fileName}" deleted`, 'success');
+
+            // If deleted file was active, clear chat and go to upload
+            if (wasActive || uploadedFiles.length === 0) {
+                document.getElementById('messages').innerHTML = '';
+                showView('Upload');
+            }
         });
 
         list.appendChild(card);
@@ -286,14 +305,9 @@ function setFile(file) {
 
 // ── Nav buttons ──
 document.getElementById('navNewChat').addEventListener('click', () => {
-    showView('Upload');
     document.getElementById('messages').innerHTML = '';
-    fileInput.value = '';
-    uploadBtn.disabled = true;
-    uploadBtnText.textContent = 'Select a PDF first';
-    const dropText = dropZone.querySelector('.drop-text');
-    dropText.innerHTML = 'Drag & drop your file here, or <label class="browse-link" for="fileInput">browse</label>';
-    dropZone.querySelector('.drop-subtext').textContent = 'Supports PDF documents up to 50MB';
+    showView('Chat');
+    document.querySelectorAll('.file-bubble').forEach(f => f.classList.remove('active'));
 });
 
 document.getElementById('uploadTriggerBtn').addEventListener('click', () => {

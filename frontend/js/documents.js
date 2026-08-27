@@ -6,9 +6,9 @@ async function loadDocuments() {
         if (docs && docs.length > 0) {
             // Sync server documents into local state
             uploadedFiles = docs.map(d => ({
-                name: d.filename || d.name,
-                chunks: d.indexed_chunks || d.chunks || '—',
-                id: d.id || null
+                id: d.document_id,
+                name: d.filename,
+                chunks: d.chunks || '—'
             }));
             renderFileList();
 
