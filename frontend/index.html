@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;450;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=20260829-7">
 </head>
 <body>
 
@@ -163,7 +163,7 @@
 <!-- Toast -->
 <div id="toast" class="toast"></div>
 
-<script src="js/api.js"></script>
+<script src="js/api.js?v=20260829-4"></script>
 <script>
 /* ═══════════════════════════════════════════════════
    QueryX — Core App State & UI Logic
@@ -175,6 +175,8 @@ let _fileCardMap = new Map();
 
 // ── View switcher ──
 window.showView = function(name) {
+    // An active upload owns the right panel until its backend request completes.
+    if (window.isDocumentProcessing && name !== 'Chat') return;
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     const el = document.getElementById('view' + name);
     if (el) el.classList.add('active');
@@ -331,7 +333,11 @@ function renderFileList() {
             }, 220);
         });
 
-        list.appendChild(bubble);
+        if (list.children[i]) {
+            list.insertBefore(bubble, list.children[i]);
+        } else {
+            list.appendChild(bubble);
+        }
         _fileCardMap.set(file.id, bubble);
     });
 }
@@ -360,6 +366,9 @@ if (dropZone) {
     });
     dropZone.addEventListener('drop', e => {
         const file = e.dataTransfer.files[0];
+        // This drop event would otherwise bubble to the global handler below
+        // and start the same upload a second time.
+        e.stopPropagation();
         if (file && (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'))) {
             if (typeof startUpload === 'function') {
                 startUpload(file);
@@ -391,20 +400,6 @@ window.addEventListener('drop', e => {
         }
     }
 });
-
-if (fileInput) {
-    fileInput.addEventListener('change', () => {
-        if (fileInput.files && fileInput.files[0]) {
-            const file = fileInput.files[0];
-            if (typeof startUpload === 'function') {
-                startUpload(file);
-            } else {
-                setFile(file);
-            }
-            fileInput.value = '';
-        }
-    });
-}
 
 function setFile(file) {
     if (!uploadBtn) return;
@@ -451,9 +446,9 @@ if (attachBtn) {
 // ── Initial render ──
 renderFileList();
 </script>
-<script src="js/upload.js"></script>
-<script src="js/chat.js"></script>
-<script src="js/documents.js"></script>
+<script src="js/upload.js?v=20260829-7"></script>
+<script src="js/chat.js?v=20260829-3"></script>
+<script src="js/documents.js?v=20260829-3"></script>
 
 </body>
 </html>

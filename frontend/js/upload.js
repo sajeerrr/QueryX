@@ -2,6 +2,8 @@
 
 const dropProgress = document.getElementById("dropProgress");
 const progressBar  = document.getElementById("progressBar");
+let uploadInProgress = false;
+window.isDocumentProcessing = false;
 
 // ── Show processing state in the chat area (right panel) ──
 function showProcessingView(fileName) {
@@ -17,14 +19,15 @@ function showProcessingView(fileName) {
         <div class="bubble processing-bubble">
             <div class="processing-header">
                 <div class="processing-spinner"></div>
-                <strong>Indexing Document</strong>
+                <strong>File is processing…</strong>
             </div>
-            <p class="processing-sub">Extracting text, chunking, and building vector embeddings${fileName ? ' for <em>' + fileName + '</em>' : ''}…</p>
+            <p class="processing-sub">Please wait while <span class="processing-file-name"></span> is prepared.</p>
             <div class="processing-bar-wrap">
                 <div class="processing-bar" id="chatProgressBar"></div>
             </div>
         </div>
     `;
+    row.querySelector(".processing-file-name").textContent = fileName || "your file";
     messages.appendChild(row);
 
     // Disable chat input while processing
@@ -39,6 +42,10 @@ function showProcessingView(fileName) {
 
 // ── Show Welcome / Ready View with starter prompt chips ──
 function showWelcomeView() {
+    // Several parts of the UI can request the welcome view. Do not let one of
+    // those requests erase an upload animation that is still in progress.
+    if (window.isDocumentProcessing) return;
+
     const messages = document.getElementById("messages");
     if (!messages) return;
     messages.innerHTML = "";
@@ -74,6 +81,28 @@ function showWelcomeView() {
     if (sendBtn) sendBtn.disabled = false;
 }
 
+function showUploadFailureView(fileName, error) {
+    const messages = document.getElementById("messages");
+    if (!messages) return;
+    messages.innerHTML = "";
+
+    const row = document.createElement("div");
+    row.className = "message ai";
+    row.innerHTML = `
+        <div class="msg-avatar ai">Q</div>
+        <div class="bubble processing-bubble">
+            <div class="processing-header"><strong>Upload could not start</strong></div>
+            <p class="processing-sub"></p>
+            <button type="button" class="starter-chip" id="retryUploadBtn">Choose a PDF and try again</button>
+        </div>
+    `;
+    row.querySelector(".processing-sub").textContent = `${fileName}: ${error}`;
+    row.querySelector("#retryUploadBtn").addEventListener("click", () => {
+        document.getElementById("fileInput")?.click();
+    });
+    messages.appendChild(row);
+}
+
 // Helper to fill input and trigger send on starter chip click
 window.askStarterQuestion = function(text) {
     const questionInput = document.getElementById("question");
@@ -91,6 +120,10 @@ window.showWelcomeView = showWelcomeView;
  * activates animations, and smoothly transitions on completion.
  */
 window.startUpload = async function(file) {
+    // A file can be received through several UI paths (drop zone, window drop,
+    // file picker). Keep one upload lifecycle in control of the processing UI.
+    if (uploadInProgress) return;
+
     if (!file) {
         showToast("Please select a PDF document first.", "error");
         return;
@@ -101,11 +134,24 @@ window.startUpload = async function(file) {
         return;
     }
 
+    uploadInProgress = true;
+    console.info("[QueryX upload] UI processing started", { name: file.name, bytes: file.size });
+    // Prevent the initial /documents request from restoring the upload screen
+    // while this upload owns the visible state.
+    window.isDocumentProcessing = true;
+
     const uploadBtn     = document.getElementById("uploadBtn");
     const uploadBtnText = document.getElementById("uploadBtnText");
     if (uploadBtn) uploadBtn.disabled = true;
     if (uploadBtnText) uploadBtnText.textContent = "Uploading…";
     if (dropProgress) dropProgress.classList.add("visible");
+    const newChatBtn = document.getElementById("navNewChat");
+    if (newChatBtn) newChatBtn.disabled = true;
+
+    // Enter the processing view before changing any other UI state. This makes
+    // the transition immediate, even while the browser is still sending a PDF.
+    showView("Chat");
+    showProcessingView(file.name);
 
     // ── 1. Optimistic: add card to LEFT sidebar with processing spinner & shimmer ──
     const tempId = '__uploading_' + Date.now();
@@ -119,22 +165,28 @@ window.startUpload = async function(file) {
     });
     renderFileList();
 
-    // ── 2. Immediately switch to Chat view and show processing on the RIGHT panel ──
-    showView("Chat");
-    showProcessingView(file.name);
-
-    let pct = 10;
-    const ticker = setInterval(() => {
-        pct = Math.min(pct + Math.random() * 12 + 4, 88);
-        if (progressBar) progressBar.style.width = pct + "%";
+    // Keep the UI animated while the normal upload endpoint performs the
+    // complete extraction → chunking → embedding → indexing workflow. Unlike
+    // a streamed response, this request cannot lose its final event midway.
+    let visualProgress = 8;
+    const processingTicker = setInterval(() => {
+        visualProgress = Math.min(visualProgress + (visualProgress < 70 ? 6 : 1.5), 90);
+        if (progressBar) progressBar.style.width = visualProgress + "%";
         const chatBar = document.getElementById("chatProgressBar");
-        if (chatBar) chatBar.style.width = pct + "%";
-    }, 200);
+        if (chatBar) chatBar.style.width = visualProgress + "%";
+
+        if (typeof _fileCardMap !== "undefined") {
+            const card = _fileCardMap.get(tempId);
+            const meta = card?.querySelector(".file-bubble-meta");
+            if (meta) meta.textContent = visualProgress < 70 ? "Processing…" : "Indexing…";
+        }
+    }, 450);
 
     try {
         const result = await uploadDocument(file);
-        clearInterval(ticker);
+        clearInterval(processingTicker);
 
+        // Ensure 100%
         if (progressBar) progressBar.style.width = "100%";
         const chatBar = document.getElementById("chatProgressBar");
         if (chatBar) chatBar.style.width = "100%";
@@ -142,41 +194,79 @@ window.startUpload = async function(file) {
         setTimeout(() => {
             if (dropProgress) dropProgress.classList.remove("visible");
             if (progressBar) progressBar.style.width = "0%";
-        }, 500);
 
-        showToast(`✓ ${result.filename} — ${result.indexed_chunks} chunks indexed`, "success");
+            showToast(`✓ ${result.filename} — ${result.indexed_chunks} chunks indexed`, "success");
 
-        // ── 3. Update placeholder in LEFT sidebar: stop animations, show check/icon ──
-        const idx = uploadedFiles.findIndex(f => f.id === tempId);
-        if (idx !== -1) {
-            // Update _fileCardMap key if card was already cached
-            if (typeof _fileCardMap !== 'undefined') {
-                const card = _fileCardMap.get(tempId);
-                if (card) {
-                    _fileCardMap.delete(tempId);
-                    _fileCardMap.set(result.document_id, card);
+            // ── 3. Update placeholder in LEFT sidebar: stop animations, show check/icon ──
+            const idx = uploadedFiles.findIndex(f => f.id === tempId);
+            if (idx !== -1) {
+                if (typeof _fileCardMap !== 'undefined') {
+                    const card = _fileCardMap.get(tempId);
+                    if (card) {
+                        _fileCardMap.delete(tempId);
+                        _fileCardMap.set(result.document_id, card);
+                    }
                 }
+
+                uploadedFiles[idx] = {
+                    id: result.document_id,
+                    name: result.filename,
+                    chunks: result.indexed_chunks,
+                    uploading: false,
+                    active: true
+                };
             }
+            renderFileList();
 
-            uploadedFiles[idx] = {
-                id: result.document_id,
-                name: result.filename,
-                chunks: result.indexed_chunks,
-                uploading: false,
-                active: true
-            };
-        }
-        renderFileList();
-
-        // ── 4. Transition chat area from processing → ready welcome view ──
-        setTimeout(() => showWelcomeView(), 300);
+            // ── 4. Transition chat area from processing → ready welcome view ──
+            setTimeout(() => {
+                window.isDocumentProcessing = false;
+                showWelcomeView();
+            }, 350);
+        }, 300);
 
     } catch (err) {
-        clearInterval(ticker);
+        clearInterval(processingTicker);
+        console.error("[QueryX upload] failed", err);
         if (dropProgress) dropProgress.classList.remove("visible");
         if (progressBar) progressBar.style.width = "0%";
 
-        // Remove optimistic placeholder on error
+        // Auto-recovery: Check if the server actually finished processing despite connection reset
+        try {
+            await new Promise(r => setTimeout(r, 600));
+            const serverDocs = await getDocuments();
+            if (serverDocs && Array.isArray(serverDocs)) {
+                const found = serverDocs.find(d => d.filename === file.name);
+                if (found) {
+                    const idx = uploadedFiles.findIndex(f => f.id === tempId);
+                    if (idx !== -1) {
+                        if (typeof _fileCardMap !== 'undefined') {
+                            const card = _fileCardMap.get(tempId);
+                            if (card) {
+                                _fileCardMap.delete(tempId);
+                                _fileCardMap.set(found.document_id, card);
+                            }
+                        }
+                        uploadedFiles[idx] = {
+                            id: found.document_id,
+                            name: found.filename,
+                            chunks: found.chunks || 1,
+                            uploading: false,
+                            active: true
+                        };
+                    }
+                    renderFileList();
+                    window.isDocumentProcessing = false;
+                    showWelcomeView();
+                    showToast(`✓ ${found.filename} indexed`, "success");
+                    return;
+                }
+            }
+        } catch (recoveryErr) {
+            // Ignore recovery check error
+        }
+
+        // Remove optimistic placeholder on genuine failure
         uploadedFiles = uploadedFiles.filter(f => f.id !== tempId);
         renderFileList();
 
@@ -189,12 +279,18 @@ window.startUpload = async function(file) {
         if (sendBtn) sendBtn.disabled = false;
 
         if (uploadedFiles.length === 0) {
-            showView("Upload");
+            showView("Chat");
         }
+        window.isDocumentProcessing = false;
+        showUploadFailureView(file.name, err.message || "Unknown upload error");
         showToast(err.message || "Upload failed. Please check backend server.", "error");
     } finally {
+        clearInterval(processingTicker);
+        uploadInProgress = false;
         if (uploadBtn) uploadBtn.disabled = false;
         if (uploadBtnText) uploadBtnText.textContent = "Select a PDF first";
+        const newChatBtn = document.getElementById("navNewChat");
+        if (newChatBtn) newChatBtn.disabled = false;
     }
 };
 
@@ -207,4 +303,15 @@ if (uploadBtnEl) {
             startUpload(fileInput.files[0]);
         }
     });
+}
+
+// Keep the file-picker lifecycle beside the upload logic. The page's initial
+// document loader cannot decide what view to show after this handler starts.
+const uploadFileInput = document.getElementById("fileInput");
+if (uploadFileInput) {
+    uploadFileInput.onchange = () => {
+        const file = uploadFileInput.files && uploadFileInput.files[0];
+        if (file) startUpload(file);
+        uploadFileInput.value = "";
+    };
 }

@@ -7,6 +7,10 @@ async function loadDocuments() {
         const docs = await getDocuments();
         _documentsLoaded = true;
 
+        // This request begins during page startup and can finish much later.
+        // Never let it replace the processing view created by a new upload.
+        if (window.isDocumentProcessing) return;
+
         if (docs && Array.isArray(docs)) {
             // Preserve any in-flight optimistic uploads (temp IDs start with '__')
             const inFlightUploads = (typeof uploadedFiles !== 'undefined' ? uploadedFiles : [])
@@ -47,6 +51,7 @@ async function loadDocuments() {
     } catch (e) {
         _documentsLoaded = true;
         console.log("loadDocuments: server not reachable", e.message);
+        if (window.isDocumentProcessing) return;
         if (typeof uploadedFiles !== 'undefined' && uploadedFiles.length === 0) {
             showView('Upload');
         }
@@ -59,4 +64,3 @@ if (document.readyState === 'loading') {
 } else {
     loadDocuments();
 }
-
