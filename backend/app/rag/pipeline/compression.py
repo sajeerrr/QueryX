@@ -1,14 +1,7 @@
-from app.rag.compressor import compressor
-
-
 class CompressionStage:
 
-    def run(self, question, chunks):
-
-        return compressor.compress(
-            question,
-            chunks,
-        )
+    def run(self, chunks):
+        return chunks
 
 
 compression_stage = CompressionStage()

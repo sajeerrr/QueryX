@@ -16,7 +16,7 @@ class RAGPipeline:
 
         history = memory_manager.history(session_id)
 
-        rewritten, chunks = retrieval_stage.run(question)
+        chunks = retrieval_stage.run(question)
 
         if not chunks:
             return {
@@ -24,15 +24,9 @@ class RAGPipeline:
                 "sources": [],
             }
 
-        chunks = ranking_stage.run(
-            rewritten,
-            chunks,
-        )
+        chunks = ranking_stage.run(chunks)
 
-        chunks = compression_stage.run(
-            rewritten,
-            chunks,
-        )
+        chunks = compression_stage.run(chunks)
 
         answer = generation_stage.run(
             question=question,
@@ -59,21 +53,15 @@ class RAGPipeline:
 
         history = memory_manager.history(session_id)
 
-        rewritten, chunks = retrieval_stage.run(question)
+        chunks = retrieval_stage.run(question)
 
         if not chunks:
             yield "I couldn't find relevant information in the uploaded documents."
             return
 
-        chunks = ranking_stage.run(
-            rewritten,
-            chunks,
-        )
+        chunks = ranking_stage.run(chunks)
 
-        chunks = compression_stage.run(
-            rewritten,
-            chunks,
-        )
+        chunks = compression_stage.run(chunks)
 
         stream = generation_stage.run_stream(
             question=question,
@@ -89,15 +77,8 @@ class RAGPipeline:
 
         answer = "".join(answer_tokens)
 
-        memory_manager.add_user(
-            session_id,
-            question,
-        )
-
-        memory_manager.add_assistant(
-            session_id,
-            answer,
-        )
+        memory_manager.add_user(session_id, question)
+        memory_manager.add_assistant(session_id, answer)
 
 
 pipeline = RAGPipeline()
