@@ -2,6 +2,36 @@ const messagesEl   = document.getElementById("messages");
 const questionInput= document.getElementById("question");
 const sendBtn      = document.getElementById("sendBtn");
 
+// Simple markdown to HTML renderer
+function renderMarkdown(text) {
+    if (!text) return '';
+
+    // Escape HTML first
+    let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    // Bold: **text** or __text__
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
+
+    // Italic: *text* or _text_
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    html = html.replace(/_(.*?)_/g, '<em>$1</em>');
+
+    // Code blocks: ```code```
+    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+
+    // Inline code: `code`
+    html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+
+    // Line breaks
+    html = html.replace(/\n/g, '<br>');
+
+    return html;
+}
+
 function addMessage(text, type, sources) {
     const row = document.createElement("div");
     row.className = `message ${type}`;
@@ -12,7 +42,7 @@ function addMessage(text, type, sources) {
 
     const bub = document.createElement("div");
     bub.className = "bubble";
-    bub.textContent = text;
+    bub.innerHTML = renderMarkdown(text);
 
     if (sources && sources.length) {
         const sc = document.createElement("div");
@@ -80,7 +110,7 @@ async function sendQuestion() {
             }
 
             answer += chunk;
-            bubble.textContent = answer;
+            bubble.innerHTML = renderMarkdown(answer);
 
             messagesEl.scrollTop = messagesEl.scrollHeight;
         });
