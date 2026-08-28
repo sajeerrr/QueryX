@@ -1,44 +1,69 @@
-def build_prompt(question: str, chunks: list[dict]) -> str:
-
+def build_prompt(
+    question: str,
+    history: list,
+    chunks,
+) -> str:
     """
-    Build the RAG prompt.
+    Build the final RAG prompt.
     """
 
+    # -----------------------------
+    # Conversation History
+    # -----------------------------
+    conversation = []
+
+    for message in history:
+        conversation.append(
+            f"{message.role.capitalize()}: {message.content}"
+        )
+
+    conversation = "\n".join(conversation)
+
+    # -----------------------------
+    # Retrieved Context
+    # -----------------------------
     context = []
 
     for chunk in chunks:
-
         context.append(
-
             f"""
-    Source: {chunk.filename}
-    Chunk: {chunk.chunk_id}
+Source: {chunk.filename}
+Chunk: {chunk.chunk_id}
 
-    {chunk.text}
-    """
-
+{chunk.text}
+"""
         )
 
     context = "\n\n".join(context)
 
+    # -----------------------------
+    # Final Prompt
+    # -----------------------------
     return f"""
-You are QueryX.
+Conversation History
+====================
 
-Answer ONLY using the provided context.
+{conversation}
 
-If the answer cannot be found, say:
+====================
 
-"I couldn't find this information in the uploaded documents."
-
-Never invent information.
-
-========================
+Retrieved Context
+====================
 
 {context}
 
-========================
+====================
 
-Question:
+Question
 
 {question}
+
+Instructions
+
+- Use the conversation history only to understand follow-up questions.
+- Answer ONLY using the retrieved context.
+- Do NOT use outside knowledge.
+- If the answer is not present in the retrieved context, reply:
+  "I couldn't find this information in the uploaded documents."
+- Be concise and accurate.
 """

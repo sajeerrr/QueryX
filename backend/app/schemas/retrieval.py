@@ -3,7 +3,7 @@ from typing import Optional
 
 
 class RetrievedChunk(BaseModel):
-    
+
     score: float
     document_id: str
     filename: str

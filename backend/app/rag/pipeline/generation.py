@@ -1,30 +1,41 @@
 from app.llm.groq import generate
 from app.llm.prompt import build_prompt
 
+
 ANSWER_SYSTEM_PROMPT = """
 You are QueryX, a Retrieval-Augmented Generation assistant.
 
 Answer ONLY using the provided document context.
 
 Rules:
+- Use the conversation history only to understand follow-up questions.
+- Use the retrieved document context as the source of truth.
 - Do not use outside knowledge.
 - If the answer is not present in the context, reply:
   "I don't know."
 - Be concise and accurate.
 """
 
+
 class GenerationStage:
 
-    def run(self, question, chunks):
+    def run(
+        self,
+        question: str,
+        history: list,
+        chunks,
+    ):
 
         prompt = build_prompt(
-            question,
-            chunks,
+            question=question,
+            history=history,
+            chunks=chunks,
         )
 
         return generate(
             prompt=prompt,
             system_prompt=ANSWER_SYSTEM_PROMPT,
         )
+
 
 generation_stage = GenerationStage()
