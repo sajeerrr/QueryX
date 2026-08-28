@@ -30,9 +30,9 @@ app.include_router(documents_router, prefix="/api", tags=["Documents"])
 
 
 @app.on_event("startup")
-def startup():
-
+async def startup():
     create_collection()
+    bm25_index.rebuild()
 
 
 @app.get("/")
@@ -47,9 +47,3 @@ async def health():
     return {
         "status": "healthy"
     }
-
-
-@app.on_event("startup")
-async def startup():
-
-    bm25_index.rebuild()

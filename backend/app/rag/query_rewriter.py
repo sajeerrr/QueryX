@@ -1,9 +1,9 @@
 from app.llm.groq import generate
 
 
-SYSTEM_PROMPT = """
-Rewrite the user's question so it is:
+SYSTEM_PROMPT = """You rewrite user questions for semantic retrieval.
 
+Requirements:
 - Standalone
 - Clear
 - Grammatically complete
@@ -17,23 +17,9 @@ class QueryRewriter:
 
     def rewrite(self, question: str) -> str:
 
-        prompt = f"""
-{SYSTEM_PROMPT}
-
-Question:
-
-{question}
-"""
-
         rewritten = generate(
-            prompt,
-            system_prompt="""
-You rewrite user questions for semantic retrieval.
-
-Return ONLY the rewritten query.
-
-Do not answer the question.
-"""
+            prompt=question,
+            system_prompt=SYSTEM_PROMPT,
         )
 
         return rewritten.strip()

@@ -3,6 +3,7 @@ from rank_bm25 import BM25Okapi
 from app.db.qdrant import client
 from app.core.config import COLLECTION_NAME
 from app.schemas.retrieval import RetrievedChunk
+from app.core.logger import logger
 
 
 class BM25Index:
@@ -15,7 +16,7 @@ class BM25Index:
 
     def rebuild(self):
 
-        print("Building BM25 index...")
+        logger.info("Building BM25 index...")
 
         self.documents.clear()
         self.metadata.clear()
@@ -62,12 +63,12 @@ class BM25Index:
         if self.documents:
 
             self.index = BM25Okapi(self.documents)
-            print(f"BM25 indexed {len(self.documents)} chunks")
+            logger.info(f"BM25 indexed {len(self.documents)} chunks")
 
         else:
 
             self.index = None
-            print("BM25 empty")
+            logger.warning("BM25 index is empty")
 
     def search(self, query: str, limit: int = 10):
 

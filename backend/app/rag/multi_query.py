@@ -1,15 +1,14 @@
 from app.llm.groq import generate
 
 
-SYSTEM_PROMPT = """
-Generate 3 different search queries.
+SYSTEM_PROMPT = """Generate 3 different search queries for the user's question.
 
 Requirements:
-
 - Different wording
 - Same meaning
 - One query per line
 - No numbering
+- Do NOT answer the question
 """
 
 
@@ -17,22 +16,9 @@ class MultiQueryGenerator:
 
     def generate(self, question: str):
 
-        prompt = f"""
-{SYSTEM_PROMPT}
-
-Question:
-
-{question}
-"""
         response = generate(
-            prompt,
-            system_prompt="""
-Generate multiple search queries.
-
-Return one query per line.
-
-Do NOT answer the question.
-"""
+            prompt=question,
+            system_prompt=SYSTEM_PROMPT,
         )
 
         queries = [

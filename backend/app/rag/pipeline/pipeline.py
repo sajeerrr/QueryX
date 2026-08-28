@@ -81,11 +81,13 @@ class RAGPipeline:
             chunks=chunks,
         )
 
-        answer = ""
+        answer_tokens = []
 
         for token in stream:
-            answer += token
+            answer_tokens.append(token)
             yield token
+
+        answer = "".join(answer_tokens)
 
         memory_manager.add_user(
             session_id,

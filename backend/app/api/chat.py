@@ -23,5 +23,5 @@ def chat_stream(request: ChatRequest):
             session_id=request.session_id,
             question=request.question,
         ),
-        media_type="text/plain",
+        media_type="text/event-stream",
     )
