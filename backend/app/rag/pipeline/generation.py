@@ -1,4 +1,4 @@
-from app.llm.groq import generate
+from app.llm.groq import generate, generate_stream
 from app.llm.prompt import build_prompt
 
 
@@ -12,7 +12,7 @@ Rules:
 - Use the retrieved document context as the source of truth.
 - Do not use outside knowledge.
 - If the answer is not present in the context, reply:
-  "I don't know."
+  "I couldn't find this information in the uploaded documents."
 - Be concise and accurate.
 """
 
@@ -33,6 +33,24 @@ class GenerationStage:
         )
 
         return generate(
+            prompt=prompt,
+            system_prompt=ANSWER_SYSTEM_PROMPT,
+        )
+
+    def run_stream(
+        self,
+        question: str,
+        history: list,
+        chunks,
+    ):
+
+        prompt = build_prompt(
+            question=question,
+            history=history,
+            chunks=chunks,
+        )
+
+        return generate_stream(
             prompt=prompt,
             system_prompt=ANSWER_SYSTEM_PROMPT,
         )

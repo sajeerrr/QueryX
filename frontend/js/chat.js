@@ -33,7 +33,9 @@ function addMessage(text, type, sources) {
     messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
+
 async function sendQuestion() {
+
     const q = questionInput.value.trim();
     if (!q) return;
 
@@ -41,24 +43,69 @@ async function sendQuestion() {
     questionInput.value = "";
     sendBtn.disabled = true;
 
-    let typingEl = null;
+    // Step 1: Show typing animation
+    const typingEl = showTyping();
+
+    // Step 2: Prepare assistant message (hidden for now)
+    const row = document.createElement("div");
+    row.className = "message ai";
+    row.style.display = "none";
+
+    const av = document.createElement("div");
+    av.className = "msg-avatar ai";
+    av.textContent = "Q";
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+
+    row.appendChild(av);
+    row.appendChild(bubble);
+    messagesEl.appendChild(row);
+
+    let answer = "";
+    let firstChunk = true;
+
     try {
-        typingEl = showTyping();
-        const res = await askQuestion(q);
-        typingEl.remove();
-        addMessage(res.answer, "ai", res.sources || []);
+
+        await streamAnswer(q, (chunk) => {
+
+            // First token received
+            if (firstChunk) {
+
+                typingEl.remove();
+
+                row.style.display = "flex";
+
+                firstChunk = false;
+            }
+
+            answer += chunk;
+            bubble.textContent = answer;
+
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        });
+
     } catch (err) {
-        if (typingEl) typingEl.remove();
-        addMessage("Something went wrong. Is the server running?", "ai");
+
+        typingEl.remove();
+        row.remove();
+
+        addMessage("Something went wrong.", "ai");
+
+        console.error(err);
+
     } finally {
+
         sendBtn.disabled = false;
     }
 }
+
 
 sendBtn.addEventListener("click", sendQuestion);
 questionInput.addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
 });
+
 
 function showTyping() {
     const row = document.createElement("div");

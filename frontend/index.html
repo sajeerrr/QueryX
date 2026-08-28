@@ -305,9 +305,20 @@ function setFile(file) {
 
 // ── Nav buttons ──
 document.getElementById('navNewChat').addEventListener('click', () => {
+
+    // Create a new conversation
+    newSession();
+
+    // Clear chat messages
     document.getElementById('messages').innerHTML = '';
+
+    // Show chat view
     showView('Chat');
-    document.querySelectorAll('.file-bubble').forEach(f => f.classList.remove('active'));
+
+    // Remove active file highlight
+    document.querySelectorAll('.file-bubble').forEach(f =>
+        f.classList.remove('active')
+    );
 });
 
 document.getElementById('uploadTriggerBtn').addEventListener('click', () => {

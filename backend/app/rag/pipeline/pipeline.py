@@ -8,12 +8,14 @@ from app.rag.pipeline.retrieval import retrieval_stage
 
 class RAGPipeline:
 
-    def run(self, session_id: str, question: str):
+    def run(
+        self,
+        session_id: str,
+        question: str,
+    ):
 
-        # Get recent conversation history
         history = memory_manager.history(session_id)
 
-        # Retrieve relevant document chunks
         rewritten, chunks = retrieval_stage.run(question)
 
         if not chunks:
@@ -22,35 +24,24 @@ class RAGPipeline:
                 "sources": [],
             }
 
-        # Rerank retrieved chunks
         chunks = ranking_stage.run(
             rewritten,
             chunks,
         )
 
-        # Compress context
         chunks = compression_stage.run(
             rewritten,
             chunks,
         )
 
-        # Generate answer using conversation history
         answer = generation_stage.run(
             question=question,
             history=history,
             chunks=chunks,
         )
 
-        # Save conversation
-        memory_manager.add_user(
-            session_id=session_id,
-            message=question,
-        )
-
-        memory_manager.add_assistant(
-            session_id=session_id,
-            message=answer,
-        )
+        memory_manager.add_user(session_id, question)
+        memory_manager.add_assistant(session_id, answer)
 
         return {
             "answer": answer,
@@ -59,6 +50,52 @@ class RAGPipeline:
                 for chunk in chunks
             ],
         }
+
+    def run_stream(
+        self,
+        session_id: str,
+        question: str,
+    ):
+
+        history = memory_manager.history(session_id)
+
+        rewritten, chunks = retrieval_stage.run(question)
+
+        if not chunks:
+            yield "I couldn't find relevant information in the uploaded documents."
+            return
+
+        chunks = ranking_stage.run(
+            rewritten,
+            chunks,
+        )
+
+        chunks = compression_stage.run(
+            rewritten,
+            chunks,
+        )
+
+        stream = generation_stage.run_stream(
+            question=question,
+            history=history,
+            chunks=chunks,
+        )
+
+        answer = ""
+
+        for token in stream:
+            answer += token
+            yield token
+
+        memory_manager.add_user(
+            session_id,
+            question,
+        )
+
+        memory_manager.add_assistant(
+            session_id,
+            answer,
+        )
 
 
 pipeline = RAGPipeline()
