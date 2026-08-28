@@ -261,11 +261,53 @@ input  { font-family: var(--font); }
     transition: border-color var(--dur) var(--ease),
                 background var(--dur) var(--ease),
                 box-shadow var(--dur-md) var(--ease),
-                transform var(--dur) var(--ease);
+                transform var(--dur) var(--ease),
+                opacity var(--dur-md) var(--ease);
     position: relative;
+    animation: fileBubbleIn var(--dur-lg) var(--spring) both;
 }
 
-.file-bubble:hover {
+/* Staggered entrance — set via inline style: --i */
+.file-bubble { animation-delay: calc(var(--i, 0) * 50ms); }
+
+/* ── Uploading / Processing state ─────────────────── */
+.file-bubble.uploading {
+    border-color: var(--accent);
+    background: var(--accent-light);
+    box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-sm);
+    cursor: default;
+}
+.file-bubble.uploading::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(59,130,246,.08) 35%,
+        rgba(59,130,246,.20) 50%,
+        rgba(59,130,246,.08) 65%,
+        transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+    pointer-events: none;
+}
+.file-bubble.uploading .file-bubble-meta {
+    color: var(--accent);
+    font-weight: 550;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.file-bubble.uploading .file-bubble-icon {
+    background: rgba(59,130,246,.18);
+    color: var(--accent);
+    animation: iconPulse 2s ease-in-out infinite;
+}
+
+.file-bubble:hover:not(.uploading) {
     border-color: var(--accent);
     background: var(--accent-light);
     box-shadow: var(--shadow-sm);
@@ -288,10 +330,10 @@ input  { font-family: var(--font); }
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: background var(--dur) var(--ease);
+    transition: all var(--dur-md) var(--ease);
 }
 .file-bubble.active .file-bubble-icon,
-.file-bubble:hover .file-bubble-icon {
+.file-bubble:hover:not(.uploading) .file-bubble-icon {
     background: rgba(59,130,246,.15);
 }
 
@@ -317,6 +359,7 @@ input  { font-family: var(--font); }
     font-size: 12px;
     color: var(--text-3);
     font-weight: 450;
+    transition: color var(--dur) var(--ease);
 }
 
 .file-bubble-delete {
@@ -390,8 +433,17 @@ input  { font-family: var(--font); }
     flex: 1;
     overflow: hidden;
     flex-direction: column;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity var(--dur-md) var(--ease),
+                transform var(--dur-md) var(--ease);
 }
-.view.active { display: flex; }
+.view.active {
+    display: flex;
+    opacity: 1;
+    transform: translateY(0);
+    animation: viewFadeIn var(--dur-md) var(--ease) both;
+}
 
 /* ════════════════════════════════════════════════════
    UPLOAD VIEW
@@ -600,7 +652,7 @@ input  { font-family: var(--font); }
     color: var(--text-2);
     transition: border-color var(--dur) var(--ease),
                 background var(--dur) var(--ease),
-                box-shadow var(--dur) var(--ease),
+                box-shadow var(--dur-md) var(--ease),
                 transform var(--dur) var(--ease);
 }
 .feature-pill:hover {
@@ -710,6 +762,48 @@ input  { font-family: var(--font); }
 }
 .chip:hover { background: rgba(59,130,246,.14); }
 
+/* Processing bubble inside chat */
+.processing-bubble {
+    background: var(--white) !important;
+    border: 1.5px dashed var(--accent) !important;
+    color: var(--text) !important;
+    min-width: 260px;
+}
+.processing-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 13.5px;
+}
+.processing-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(59,130,246,.25);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: processSpin .8s linear infinite;
+}
+.processing-sub {
+    font-size: 12px;
+    color: var(--text-2);
+    margin-bottom: 10px;
+    line-height: 1.4;
+}
+.processing-bar-wrap {
+    height: 4px;
+    background: var(--border-light);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.processing-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #8B5CF6);
+    width: 0%;
+    border-radius: 2px;
+    transition: width .25s ease;
+}
+
 /* Typing dots */
 .typing-bubble .bubble { padding: 16px 20px; }
 .dot-row { display: flex; gap: 5px; align-items: center; }
@@ -721,6 +815,80 @@ input  { font-family: var(--font); }
 }
 .dot-row span:nth-child(2) { animation-delay: .18s; }
 .dot-row span:nth-child(3) { animation-delay: .36s; }
+
+/* ── Welcome / Ready Card in Chat ─────────────────── */
+.welcome-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--r-2xl);
+    padding: 32px 24px;
+    margin: auto;
+    max-width: 480px;
+    box-shadow: var(--shadow-sm);
+    animation: fadeUp var(--dur-lg) var(--ease) both;
+}
+
+.welcome-icon-wrap {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--r-xl);
+    background: var(--accent-light);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+}
+
+.welcome-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+    letter-spacing: -.3px;
+}
+
+.welcome-sub {
+    font-size: 13px;
+    color: var(--text-2);
+    margin-bottom: 20px;
+    line-height: 1.5;
+    max-width: 380px;
+}
+
+.starter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+.starter-chip {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r-pill);
+    padding: 8px 16px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+    cursor: pointer;
+    transition: background var(--dur) var(--ease),
+                border-color var(--dur) var(--ease),
+                transform var(--dur) var(--ease),
+                box-shadow var(--dur) var(--ease);
+}
+.starter-chip:hover {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-xs);
+}
+.starter-chip:active { transform: translateY(0); }
 
 /* ── Chat Input Bar ──────────────────────────────────── */
 .chat-input-bar {
@@ -782,7 +950,7 @@ input  { font-family: var(--font); }
     flex-shrink: 0;
     transition: background var(--dur) var(--ease),
                 transform var(--dur) var(--ease),
-                box-shadow var(--dur) var(--ease);
+                box-shadow var(--dur-md) var(--ease);
 }
 .btn-send:hover:not(:disabled) {
     background: var(--accent-hover);
@@ -840,6 +1008,37 @@ input  { font-family: var(--font); }
 @keyframes dotBounce {
     0%,60%,100% { transform: translateY(0); }
     30%          { transform: translateY(-6px); }
+}
+@keyframes fileBubbleIn {
+    from {
+        opacity: 0;
+        transform: translateX(-12px) scale(.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+@keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+@keyframes viewFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fileBubbleSuccess {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.04); }
+    100% { transform: scale(1); }
+}
+@keyframes processSpin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+@keyframes iconPulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.08); }
 }
 
 /* ── Responsive ─────────────────────────────────────── */

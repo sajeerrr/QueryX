@@ -69,6 +69,12 @@ async function sendQuestion() {
     const q = questionInput.value.trim();
     if (!q) return;
 
+    // ── Remove initial welcome card when user starts chatting ──
+    const welcomeCard = document.getElementById("welcomeCard");
+    if (welcomeCard) {
+        welcomeCard.remove();
+    }
+
     addMessage(q, "user");
     questionInput.value = "";
     sendBtn.disabled = true;

@@ -22,11 +22,15 @@ function newSession() {
 async function uploadDocument(file){
 
     const formData = new FormData();
-    formData.append("file",file);
-    const response = await fetch(`${API}/upload`,{
-        method:"POST",
-        body:formData
+    formData.append("file", file);
+    const response = await fetch(`${API}/upload`, {
+        method: "POST",
+        body: formData
     });
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Upload failed with status ${response.status}`);
+    }
     return response.json();
 }
 

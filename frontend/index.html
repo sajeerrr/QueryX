@@ -164,16 +164,14 @@
 <div id="toast" class="toast"></div>
 
 <script src="js/api.js"></script>
-<script src="js/chat.js"></script>
-<script src="js/documents.js"></script>
-<script src="js/upload.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════
-   QueryX — App Logic
+   QueryX — Core App State & UI Logic
 ═══════════════════════════════════════════════════ */
 
-// ── State ──
+// ── Global State ──
 let uploadedFiles = [];
+let _fileCardMap = new Map();
 
 // ── View switcher ──
 window.showView = function(name) {
@@ -182,155 +180,280 @@ window.showView = function(name) {
     if (el) el.classList.add('active');
 };
 
-// ── File list rendering ──
+// ── File list rendering (in-place updates to prevent flicker) ──
 function renderFileList() {
     const list = document.getElementById('fileList');
     const empty = document.getElementById('panelEmpty');
-    list.innerHTML = '';
+    if (!list || !empty) return;
 
     if (uploadedFiles.length === 0) {
+        list.innerHTML = '';
+        _fileCardMap.clear();
         empty.style.display = 'flex';
-        showView('Upload');
+        // Only show upload view if not already in chat with active session
+        const chatView = document.getElementById('viewChat');
+        if (!chatView || !chatView.classList.contains('active')) {
+            showView('Upload');
+        }
         return;
     }
 
     empty.style.display = 'none';
 
+    // Remove deleted cards
+    const currentIds = new Set(uploadedFiles.map(f => f.id));
+    for (const [id, card] of _fileCardMap) {
+        if (!currentIds.has(id)) {
+            card.remove();
+            _fileCardMap.delete(id);
+        }
+    }
+
     uploadedFiles.forEach((file, i) => {
-        const card = document.createElement('div');
-        card.className = 'file-bubble' + (i === 0 ? ' active' : '');
-        card.innerHTML = `
+        let bubble = _fileCardMap.get(file.id);
+
+        if (bubble) {
+            bubble.dataset.id = file.id;
+            // Update existing card smoothly in-place without rebuilding DOM
+            const meta = bubble.querySelector('.file-bubble-meta');
+            if (meta) meta.textContent = file.uploading ? 'Processing…' : `${file.chunks} chunks · PDF`;
+
+            const iconWrap = bubble.querySelector('.file-bubble-icon');
+            if (iconWrap) {
+                iconWrap.innerHTML = file.uploading ? `
+                    <div class="processing-spinner" style="width:18px;height:18px;border-width:2.5px;"></div>
+                ` : `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                `;
+            }
+
+            if (file.uploading) {
+                bubble.classList.add('uploading');
+            } else {
+                if (bubble.classList.contains('uploading')) {
+                    bubble.classList.remove('uploading');
+                    bubble.style.animation = 'fileBubbleSuccess .35s var(--spring)';
+                }
+            }
+
+            if (file.active) {
+                bubble.classList.add('active');
+            } else {
+                bubble.classList.remove('active');
+            }
+            return;
+        }
+
+        // Create new bubble
+        bubble = document.createElement('div');
+        bubble.dataset.id = file.id;
+        bubble.className = 'file-bubble' + (file.uploading ? ' uploading' : '') + (file.active ? ' active' : '');
+        bubble.style.setProperty('--i', i);
+        bubble.innerHTML = `
             <div class="file-bubble-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
+                ${file.uploading ? `
+                    <div class="processing-spinner" style="width:18px;height:18px;border-width:2.5px;"></div>
+                ` : `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                `}
             </div>
             <div class="file-bubble-info">
-                <span class="file-bubble-name">${file.name}</span>
-                <span class="file-bubble-meta">${file.chunks} chunks · PDF</span>
+                <span class="file-bubble-name" title="${file.name}">${file.name}</span>
+                <span class="file-bubble-meta">${file.uploading ? 'Processing…' : file.chunks + ' chunks · PDF'}</span>
             </div>
-            <button class="file-bubble-delete" data-index="${i}" title="Remove">
+            <button class="file-bubble-delete" data-index="${i}" title="Remove document">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                     <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 </svg>
             </button>
         `;
 
-        card.addEventListener('click', (e) => {
+        // Click bubble → activate and show chat
+        bubble.addEventListener('click', (e) => {
             if (e.target.closest('.file-bubble-delete')) return;
-            document.querySelectorAll('.file-bubble').forEach(f => f.classList.remove('active'));
-            card.classList.add('active');
+            if (file.uploading) return;
+            uploadedFiles.forEach(f => f.active = false);
+            file.active = true;
+            renderFileList();
             showView('Chat');
-            addWelcomeAfterUpload(file.name);
+            if (typeof showWelcomeView === 'function') {
+                showWelcomeView();
+            }
         });
 
-        card.querySelector('.file-bubble-delete').addEventListener('click', async () => {
-            const wasActive = card.classList.contains('active');
-            const fileName = file.name;
+        // Delete button
+        const delBtn = bubble.querySelector('.file-bubble-delete');
+        delBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const fileId = bubble.dataset.id || file.id;
+            const currentDoc = uploadedFiles.find(f => f.id === fileId) || file;
+            const wasActive = currentDoc.active;
+            const fileName = currentDoc.name;
 
-            // Call backend to permanently delete from server
+            bubble.style.animation = 'none';
+            bubble.style.transition = 'opacity .2s var(--ease), transform .2s var(--ease)';
+            bubble.style.opacity = '0';
+            bubble.style.transform = 'translateX(-12px) scale(.95)';
+
             try {
-                await deleteDocument(file.id);
+                await deleteDocument(fileId);
             } catch (err) {
                 console.error('Delete API error:', err);
                 showToast('Failed to delete from server.', 'error');
             }
 
-            // Remove from local state and re-render
-            uploadedFiles.splice(i, 1);
-            renderFileList();
-            showToast(`"${fileName}" deleted`, 'success');
+            setTimeout(() => {
+                if (bubble.parentNode) bubble.remove();
+                _fileCardMap.delete(fileId);
+                uploadedFiles = uploadedFiles.filter(f => f.id !== fileId);
+                showToast(`"${fileName}" deleted`, 'info');
 
-            // If deleted file was active, clear chat and go to upload
-            if (wasActive || uploadedFiles.length === 0) {
-                document.getElementById('messages').innerHTML = '';
-                showView('Upload');
-            }
+                if (uploadedFiles.length === 0) {
+                    document.getElementById('messages').innerHTML = '';
+                    _fileCardMap.clear();
+                    empty.style.display = 'flex';
+                    showView('Upload');
+                } else if (wasActive) {
+                    uploadedFiles[0].active = true;
+                    renderFileList();
+                    if (typeof showWelcomeView === 'function') {
+                        showWelcomeView();
+                    }
+                } else {
+                    renderFileList();
+                }
+            }, 220);
         });
 
-        list.appendChild(card);
+        list.appendChild(bubble);
+        _fileCardMap.set(file.id, bubble);
     });
 }
 
 // ── Toast ──
 window.showToast = function(msg, type = 'info') {
     const t = document.getElementById('toast');
+    if (!t) return;
     t.textContent = msg;
     t.className = `toast toast-${type} show`;
     setTimeout(() => t.className = 'toast', 3200);
 };
 
-// ── Drop zone interactions ──
+// ── Drop zone and file selection interactions ──
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const uploadBtn = document.getElementById('uploadBtn');
 const uploadBtnText = document.getElementById('uploadBtnText');
 
-['dragover','dragenter'].forEach(evt => {
-    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-});
-['dragleave','dragend','drop'].forEach(evt => {
-    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.remove('dragover'); });
-});
-dropZone.addEventListener('drop', e => {
-    const file = e.dataTransfer.files[0];
-    if (file && file.type === 'application/pdf') setFile(file);
-});
+if (dropZone) {
+    ['dragover','dragenter'].forEach(evt => {
+        dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    });
+    ['dragleave','dragend','drop'].forEach(evt => {
+        dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.remove('dragover'); });
+    });
+    dropZone.addEventListener('drop', e => {
+        const file = e.dataTransfer.files[0];
+        if (file && (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'))) {
+            if (typeof startUpload === 'function') {
+                startUpload(file);
+            } else {
+                setFile(file);
+            }
+        } else if (file) {
+            showToast('Please upload a valid PDF document.', 'error');
+        }
+    });
 
-fileInput.addEventListener('change', () => {
-    if (fileInput.files[0]) setFile(fileInput.files[0]);
-});
+    dropZone.addEventListener('click', (e) => {
+        if (e.target.tagName !== 'LABEL') {
+            fileInput.click();
+        }
+    });
+}
 
-dropZone.addEventListener('click', (e) => {
-    if (!e.target.closest('.browse-link')) {
-        fileInput.click();
+// Global window drop listener
+window.addEventListener('dragover', e => { e.preventDefault(); });
+window.addEventListener('drop', e => {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        const file = e.dataTransfer.files[0];
+        if (file && (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'))) {
+            if (typeof startUpload === 'function') {
+                startUpload(file);
+            }
+        }
     }
 });
 
-document.querySelector('.browse-link').addEventListener('click', e => {
-    e.preventDefault();
-    fileInput.click();
-});
+if (fileInput) {
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files && fileInput.files[0]) {
+            const file = fileInput.files[0];
+            if (typeof startUpload === 'function') {
+                startUpload(file);
+            } else {
+                setFile(file);
+            }
+            fileInput.value = '';
+        }
+    });
+}
 
 function setFile(file) {
+    if (!uploadBtn) return;
     uploadBtn.disabled = false;
     uploadBtnText.textContent = `Upload "${file.name}"`;
     dropZone.querySelector('.drop-text').innerHTML = '📄 <strong>' + file.name + '</strong>';
     dropZone.querySelector('.drop-subtext').textContent = (file.size / 1024).toFixed(0) + ' KB · Ready to upload';
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    fileInput.files = dt.files;
 }
 
-// ── Nav buttons ──
-document.getElementById('navNewChat').addEventListener('click', () => {
+// ── Nav & Action Buttons ──
+const navNewChat = document.getElementById('navNewChat');
+if (navNewChat) {
+    navNewChat.addEventListener('click', () => {
+        if (typeof newSession === 'function') newSession();
+        document.getElementById('messages').innerHTML = '';
+        showView('Chat');
+        if (uploadedFiles.length > 0) {
+            const activeDoc = uploadedFiles.find(f => f.active) || uploadedFiles[0];
+            uploadedFiles.forEach(f => f.active = (f.id === activeDoc.id));
+            renderFileList();
+            if (typeof showWelcomeView === 'function') {
+                showWelcomeView();
+            }
+        }
+    });
+}
 
-    // Create a new conversation
-    newSession();
+// Upload button in sidebar header triggers file picker
+const uploadTriggerBtn = document.getElementById('uploadTriggerBtn');
+if (uploadTriggerBtn) {
+    uploadTriggerBtn.addEventListener('click', () => {
+        if (fileInput) fileInput.click();
+    });
+}
 
-    // Clear chat messages
-    document.getElementById('messages').innerHTML = '';
-
-    // Show chat view
-    showView('Chat');
-
-    // Remove active file highlight
-    document.querySelectorAll('.file-bubble').forEach(f =>
-        f.classList.remove('active')
-    );
-});
-
-document.getElementById('uploadTriggerBtn').addEventListener('click', () => {
-    showView('Upload');
-});
-
-// ── Attach button in chat ──
-document.getElementById('attachBtn').addEventListener('click', () => showView('Upload'));
+// Paperclip attach button in chat bar triggers file picker
+const attachBtn = document.getElementById('attachBtn');
+if (attachBtn) {
+    attachBtn.addEventListener('click', () => {
+        if (fileInput) fileInput.click();
+    });
+}
 
 // ── Initial render ──
 renderFileList();
 </script>
+<script src="js/upload.js"></script>
+<script src="js/chat.js"></script>
+<script src="js/documents.js"></script>
 
 </body>
 </html>
