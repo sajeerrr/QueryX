@@ -1,6 +1,6 @@
 # QueryX
 
-QueryX is an AI-powered Retrieval-Augmented Generation (RAG) application that allows users to upload PDF documents and ask questions in natural language. It retrieves relevant information using Hybrid Search and generates context-aware answers using Groq LLM.
+QueryX is an AI-powered Retrieval-Augmented Generation (RAG) application that allows users to upload PDF documents and ask questions in natural language. It retrieves relevant information using Hybrid Search and generates context-aware answers using LLM.
 
 ## Features
 
@@ -8,7 +8,7 @@ QueryX is an AI-powered Retrieval-Augmented Generation (RAG) application that al
 - Automatic text extraction and chunking
 - Hybrid Search (Dense + BM25 + RRF)
 - Query Rewriting
-- AI-powered answer generation with Groq LLM
+- AI-powered answer generation with LLM
 - Streaming responses
 - Session-based chat memory
 - Confidence score
