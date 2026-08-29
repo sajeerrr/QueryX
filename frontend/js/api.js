@@ -21,7 +21,7 @@ function newSession() {
 }
 
 
-async function uploadDocument(file){
+async function uploadDocument(file, { signal, uploadId } = {}){
 
     const formData = new FormData();
     formData.append("file", file);
@@ -34,7 +34,9 @@ async function uploadDocument(file){
     try {
         response = await fetch(`${API}/upload`, {
             method: "POST",
-            body: formData
+            body: formData,
+            signal,
+            headers: uploadId ? { "X-Upload-Id": uploadId } : undefined
         });
     } catch (error) {
         console.error("[QueryX upload] request could not reach the backend", error);
@@ -48,6 +50,14 @@ async function uploadDocument(file){
     const result = await response.json();
     console.info("[QueryX upload] indexing completed", result);
     return result;
+}
+
+async function cancelDocumentUpload(uploadId) {
+    if (!uploadId) return;
+
+    await fetch(`${API}/upload/cancel/${encodeURIComponent(uploadId)}`, {
+        method: "POST"
+    });
 }
 
 

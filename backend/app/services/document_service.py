@@ -1,14 +1,17 @@
 from pathlib import Path
 from fastapi import HTTPException
 
-from app.rag.chunker import chunk_text
+from app.rag.chunker import chunk_text, ChunkingCancelled
 from app.utils.pdf import extract_text
 from app.utils.text import clean_text
 from app.rag.indexer import index_document
+from app.services.document_manager import delete_document
 from app.core.logger import logger
 
 import os
 import tempfile
+import threading
+import uuid
 from time import perf_counter
 # Keep uploaded files outside the project tree. Live Server watches this project
 # and reloads the browser when a file changes under it, which would erase the
@@ -18,15 +21,78 @@ UPLOAD_DIR = Path(os.getenv("QUERYX_UPLOAD_DIR", Path(tempfile.gettempdir()) / "
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 logger.info("DOCUMENT STORAGE | upload directory=%s", UPLOAD_DIR)
 
+_processing_jobs: dict[str, threading.Event] = {}
+_processing_jobs_lock = threading.Lock()
+
+
+class DocumentProcessingCancelled(Exception):
+    pass
+
+
+def _rollback_partial_document(filename: str, document_id: str | None, filepath: Path | None = None):
+    if not document_id:
+        return
+    try:
+        delete_document(document_id)
+        logger.info("DOCUMENT | deleted partial document | filename=%r | document_id=%s", filename, document_id)
+    except Exception:
+        logger.exception("DOCUMENT | failed to delete partial document | filename=%r | document_id=%s", filename, document_id)
+
+    if filepath is not None:
+        try:
+            filepath.unlink(missing_ok=True)
+            logger.info("DOCUMENT | removed cancelled upload file | path=%s", filepath)
+        except OSError:
+            logger.warning("DOCUMENT | could not remove cancelled upload | path=%s", filepath)
+
+
+def begin_processing(upload_id: str | None) -> threading.Event | None:
+    if not upload_id:
+        return None
+    event = threading.Event()
+    with _processing_jobs_lock:
+        _processing_jobs[upload_id] = event
+    return event
+
+
+def cancel_processing(upload_id: str) -> bool:
+    with _processing_jobs_lock:
+        event = _processing_jobs.get(upload_id)
+    if not event:
+        return False
+    event.set()
+    return True
+
+
+def finish_processing(upload_id: str | None):
+    if not upload_id:
+        return
+    with _processing_jobs_lock:
+        _processing_jobs.pop(upload_id, None)
+
 
 import json
 import asyncio
 
-def process_document(filename: str, data: bytes):
+def process_document(filename: str, data: bytes, cancel_event: threading.Event | None = None):
     started_at = perf_counter()
     logger.info("DOCUMENT | started regular processing | filename=%r | bytes=%d", filename, len(data))
 
     filepath = UPLOAD_DIR / filename
+    document_id = str(uuid.uuid4())
+
+    def check_cancelled(document_id_for_cleanup: str | None = None):
+        if cancel_event and cancel_event.is_set():
+            logger.info("DOCUMENT | cancellation requested | filename=%r | document_id=%s", filename, document_id_for_cleanup)
+            if document_id_for_cleanup:
+                _rollback_partial_document(filename, document_id_for_cleanup, filepath)
+            else:
+                try:
+                    filepath.unlink(missing_ok=True)
+                except OSError:
+                    logger.warning("DOCUMENT | could not remove cancelled upload | path=%s", filepath)
+            raise DocumentProcessingCancelled()
+
     try:
         with open(filepath, "wb") as f:
             f.write(data)
@@ -34,12 +100,14 @@ def process_document(filename: str, data: bytes):
     except Exception:
         logger.exception("DOCUMENT | failed to save upload | filename=%r | path=%s", filename, filepath)
 
+    check_cancelled(document_id)
     try:
         raw_text = extract_text(data)
     except ValueError as e:
         logger.warning("DOCUMENT | PDF extraction failed | filename=%r | error=%s", filename, e)
         raise HTTPException(status_code=400, detail=str(e))
 
+    check_cancelled(document_id)
     text = clean_text(raw_text)
     if not text.strip():
         logger.warning("DOCUMENT | no extractable text | filename=%r", filename)
@@ -49,7 +117,11 @@ def process_document(filename: str, data: bytes):
 
     logger.info("DOCUMENT | chunking started | filename=%r", filename)
     chunking_started_at = perf_counter()
-    chunks = chunk_text(text)
+    try:
+        chunks = chunk_text(text, should_cancel=lambda: bool(cancel_event and cancel_event.is_set()))
+    except ChunkingCancelled as exc:
+        check_cancelled(document_id)
+        raise DocumentProcessingCancelled() from exc
     logger.info("DOCUMENT | chunking finished | filename=%r | elapsed_seconds=%.2f", filename, perf_counter() - chunking_started_at)
     if not chunks:
         logger.warning("DOCUMENT | no chunks created | filename=%r", filename)
@@ -57,9 +129,15 @@ def process_document(filename: str, data: bytes):
 
     logger.info("DOCUMENT | chunks created | filename=%r | chunks=%d", filename, len(chunks))
 
+    check_cancelled(document_id)
     logger.info("DOCUMENT | embedding and indexing started | filename=%r", filename)
-    result = index_document(filename, chunks)
+    result = index_document(filename, chunks, document_id=document_id)
     logger.info("DOCUMENT | indexing complete | filename=%r | document_id=%s | indexed_chunks=%d | elapsed_seconds=%.2f", filename, result["document_id"], result["indexed_chunks"], perf_counter() - started_at)
+
+    if cancel_event and cancel_event.is_set():
+        logger.info("DOCUMENT | cancellation was requested after indexing started | filename=%r | document_id=%s", filename, document_id)
+        _rollback_partial_document(filename, document_id, filepath)
+        raise DocumentProcessingCancelled()
 
     return {
         "document_id": result["document_id"],

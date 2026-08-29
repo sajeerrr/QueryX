@@ -3,6 +3,7 @@
 const dropProgress = document.getElementById("dropProgress");
 const progressBar  = document.getElementById("progressBar");
 let uploadInProgress = false;
+let activeUpload = null;
 window.isDocumentProcessing = false;
 
 // ── Show processing state in the chat area (right panel) ──
@@ -12,7 +13,7 @@ function showProcessingView(fileName) {
     messages.innerHTML = "";
 
     const row = document.createElement("div");
-    row.className = "message ai";
+    row.className = "message ai processing-message";
     row.id = "processingMessage";
     row.innerHTML = `
         <div class="msg-avatar ai">Q</div>
@@ -25,9 +26,17 @@ function showProcessingView(fileName) {
             <div class="processing-bar-wrap">
                 <div class="processing-bar" id="chatProgressBar"></div>
             </div>
+            <button type="button" class="stop-processing-btn" id="stopProcessingBtn">Stop processing</button>
         </div>
     `;
+    const stopBtn = row.querySelector("#stopProcessingBtn");
     row.querySelector(".processing-file-name").textContent = fileName || "your file";
+    stopBtn?.addEventListener("click", () => {
+        stopBtn.disabled = true;
+        stopBtn.textContent = "Cancelling…";
+        stopBtn.classList.add("is-cancelling");
+        window.cancelCurrentUpload?.();
+    });
     messages.appendChild(row);
 
     // Disable chat input while processing
@@ -115,6 +124,34 @@ window.askStarterQuestion = function(text) {
 window.showProcessingView = showProcessingView;
 window.showWelcomeView = showWelcomeView;
 
+window.cancelCurrentUpload = async function() {
+    if (!activeUpload || activeUpload.cancelled) return;
+
+    activeUpload.cancelled = true;
+    const cancelBtn = document.getElementById("stopProcessingBtn");
+    if (cancelBtn) {
+        cancelBtn.disabled = true;
+        cancelBtn.textContent = "Cancelling…";
+        cancelBtn.classList.add("is-cancelling");
+    }
+    activeUpload.controller.abort();
+    // Tell the server to stop even if it has already received the complete PDF.
+    cancelDocumentUpload(activeUpload.uploadId).catch(error => {
+        console.warn("[QueryX upload] could not send cancellation request", error);
+    });
+};
+
+function showUploadCancelledView(fileName) {
+    const messages = document.getElementById("messages");
+    if (!messages) return;
+    messages.innerHTML = `
+        <div class="welcome-card">
+            <div class="welcome-icon-wrap">✓</div>
+            <h3 class="welcome-title">Processing stopped</h3>
+            <p class="welcome-sub">${fileName} was not added. You can choose another PDF whenever you’re ready.</p>
+        </div>`;
+}
+
 /**
  * Main upload function: immediately adds optimistic item to left sidebar,
  * activates animations, and smoothly transitions on completion.
@@ -135,6 +172,9 @@ window.startUpload = async function(file) {
     }
 
     uploadInProgress = true;
+    const controller = new AbortController();
+    const uploadId = crypto.randomUUID();
+    activeUpload = { controller, uploadId, cancelled: false };
     console.info("[QueryX upload] UI processing started", { name: file.name, bytes: file.size });
     // Prevent the initial /documents request from restoring the upload screen
     // while this upload owns the visible state.
@@ -183,7 +223,7 @@ window.startUpload = async function(file) {
     }, 450);
 
     try {
-        const result = await uploadDocument(file);
+        const result = await uploadDocument(file, { signal: controller.signal, uploadId });
         clearInterval(processingTicker);
 
         // Ensure 100%
@@ -230,6 +270,16 @@ window.startUpload = async function(file) {
         console.error("[QueryX upload] failed", err);
         if (dropProgress) dropProgress.classList.remove("visible");
         if (progressBar) progressBar.style.width = "0%";
+
+        const wasCancelled = activeUpload?.uploadId === uploadId && activeUpload.cancelled;
+        if (wasCancelled || err.name === "AbortError") {
+            uploadedFiles = uploadedFiles.filter(f => f.id !== tempId);
+            renderFileList();
+            window.isDocumentProcessing = false;
+            showUploadCancelledView(file.name);
+            showToast("Processing stopped", "info");
+            return;
+        }
 
         // Auto-recovery: Check if the server actually finished processing despite connection reset
         try {
@@ -291,6 +341,7 @@ window.startUpload = async function(file) {
         if (uploadBtnText) uploadBtnText.textContent = "Select a PDF first";
         const newChatBtn = document.getElementById("navNewChat");
         if (newChatBtn) newChatBtn.disabled = false;
+        if (activeUpload?.uploadId === uploadId) activeUpload = null;
     }
 };
 

@@ -63,9 +63,9 @@ class TerminalIndexingAnimation:
             self._stop_event.wait(0.12)
 
 
-def index_document(filename: str, chunks: list[str]):
+def index_document(filename: str, chunks: list[str], document_id: str | None = None):
 
-    document_id = str(uuid.uuid4())
+    document_id = document_id or str(uuid.uuid4())
     logger.info("INDEXER | started | filename=%r | document_id=%s | chunks=%d", filename, document_id, len(chunks))
     animation = TerminalIndexingAnimation(filename, len(chunks))
     animation.start()
