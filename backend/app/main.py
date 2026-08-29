@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.qdrant_service import create_collection
+from app.services.cleanup_service import cleanup_service
 
 from app.api.search import router as search_router
 from app.api.upload import router as upload_router
@@ -33,6 +34,7 @@ app.include_router(documents_router, prefix="/api", tags=["Documents"])
 async def startup():
     create_collection()
     bm25_index.rebuild()
+    cleanup_service.start()
 
 
 @app.get("/")
@@ -40,6 +42,11 @@ async def root():
     return {
         "message": "Production RAG API"
     }
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    cleanup_service.stop()
 
 
 @app.get("/health")

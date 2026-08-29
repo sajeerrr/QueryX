@@ -6,18 +6,14 @@ from app.utils.pdf import extract_text
 from app.utils.text import clean_text
 from app.rag.indexer import index_document
 from app.services.document_manager import delete_document
+from app.core.config import UPLOAD_DIR
 from app.core.logger import logger
 
-import os
-import tempfile
 import threading
 import uuid
 from time import perf_counter
-# Keep uploaded files outside the project tree. Live Server watches this project
-# and reloads the browser when a file changes under it, which would erase the
-# frontend processing animation in the middle of an upload.
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-UPLOAD_DIR = Path(os.getenv("QUERYX_UPLOAD_DIR", Path(tempfile.gettempdir()) / "queryx_uploads"))
+
+# Ensure upload directory exists
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 logger.info("DOCUMENT STORAGE | upload directory=%s", UPLOAD_DIR)
 
