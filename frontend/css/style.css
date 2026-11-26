@@ -816,16 +816,17 @@ input  { font-family: var(--font); }
     line-height: 1.4;
 }
 .processing-bar-wrap {
-    height: 5px;
-    background: rgba(148,163,184,.18);
+    height: 7px;
+    background: rgba(148,163,184,.22);
     border-radius: 999px;
     overflow: hidden;
-    border: 1px solid rgba(148,163,184,.12);
+    border: 1px solid rgba(148,163,184,.15);
 }
 .processing-bar {
+    display: block;
     height: 100%;
     background: linear-gradient(90deg, var(--accent), #8B5CF6 55%, #EC4899);
-    width: 0%;
+    width: 8%;
     border-radius: inherit;
     transition: width .25s ease;
     box-shadow: 0 0 18px rgba(99,102,241,.28);

@@ -276,8 +276,8 @@ window.startUpload = async function(file) {
             setTimeout(() => {
                 window.isDocumentProcessing = false;
                 showWelcomeView();
-            }, 350);
-        }, 300);
+            }, 150);
+        }, 150);
 
     } catch (err) {
         clearInterval(processingTicker);

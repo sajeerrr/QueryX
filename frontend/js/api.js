@@ -54,20 +54,40 @@ async function uploadDocument(file, { signal, uploadId } = {}) {
         endpoint: `${API}/upload`
     });
 
+    const timeoutMs = 120000;
+    const timeoutController = new AbortController();
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+        timedOut = true;
+        timeoutController.abort();
+    }, timeoutMs);
+
+    const onExternalAbort = () => timeoutController.abort();
+    if (signal) {
+        if (signal.aborted) timeoutController.abort();
+        else signal.addEventListener("abort", onExternalAbort, { once: true });
+    }
+
     let response;
     try {
         response = await fetch(`${API}/upload`, {
             method: "POST",
             body: formData,
-            signal,
+            signal: timeoutController.signal,
             headers: uploadId ? { "X-Upload-Id": uploadId } : undefined
         });
     } catch (error) {
+        if (timedOut) {
+            throw new Error("Upload timed out waiting for the backend server.");
+        }
         if (error && error.name === "AbortError") {
             throw error;
         }
         console.error("[QueryX upload] request could not reach the backend", error);
         throw new Error("Could not connect to the upload API at " + API);
+    } finally {
+        clearTimeout(timeoutId);
+        if (signal) signal.removeEventListener("abort", onExternalAbort);
     }
 
     console.info("[QueryX upload] reliable upload response received", { status: response.status, ok: response.ok });

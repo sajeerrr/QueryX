@@ -45,14 +45,13 @@ class CleanupService:
 
     def _run(self):
         """Main cleanup loop."""
-        # Run initial cleanup after a short delay to let the server start
-        time.sleep(10)
+        # Wait interruptibly so server shutdown/reload never blocks on sleep.
+        if self._stop_event.wait(10):
+            return
         self._cleanup()
 
         while not self._stop_event.is_set():
-            # Wait for the check interval or stop signal
-            self._stop_event.wait(AUTO_DELETE_CHECK_INTERVAL)
-            if self._stop_event.is_set():
+            if self._stop_event.wait(AUTO_DELETE_CHECK_INTERVAL):
                 break
 
             self._cleanup()
