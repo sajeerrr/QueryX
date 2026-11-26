@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi.concurrency import run_in_threadpool
 
-from app.services.document_manager import list_documents, delete_document
+from app.services.document_service import delete_document, list_documents
 
 router = APIRouter()
 

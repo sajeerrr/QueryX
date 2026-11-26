@@ -1,15 +1,24 @@
-// Use the same loopback host as the page (127.0.0.1 in the local UI) rather
-// than mixing localhost and 127.0.0.1 across browser/network configurations.
-// const API = `${window.location.protocol}//${window.location.hostname}:8000/api`;
+// Use the same loopback host as the page.
 const API = "/api";
 
+// Generate a unique ID with a fallback for browsers that don't support crypto.randomUUID()
+function generateId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+    }
 
+    return (
+        Date.now().toString(36) +
+        "-" +
+        Math.random().toString(36).substring(2, 15)
+    );
+}
 
 function getSessionId() {
     let sessionId = localStorage.getItem("queryx_session_id");
 
     if (!sessionId) {
-        sessionId = crypto.randomUUID();
+        sessionId = generateId();
         localStorage.setItem("queryx_session_id", sessionId);
     }
 
@@ -17,11 +26,10 @@ function getSessionId() {
 }
 
 function newSession() {
-    const sessionId = crypto.randomUUID();
+    const sessionId = generateId();
     localStorage.setItem("queryx_session_id", sessionId);
     return sessionId;
 }
-
 
 async function uploadDocument(file, { signal, uploadId } = {}){
 

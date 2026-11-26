@@ -1,19 +1,17 @@
 # QueryX
 
-QueryX is an AI-powered Retrieval-Augmented Generation (RAG) application that allows users to upload PDF documents and ask questions in natural language. It retrieves relevant information using Hybrid Search and generates context-aware answers using Groq LLM.
+QueryX is an AI-powered Retrieval-Augmented Generation (RAG) application that allows users to upload PDF documents and ask questions in natural language. It retrieves relevant information using Hybrid Search (Dense Embeddings + BM25 + RRF) and generates context-aware answers using Groq LLM.
 
 ## Features
 
-- Upload and process PDF documents
+- Upload and process PDF documents (with cancellation support)
 - Automatic text extraction and chunking
-- Hybrid Search (Dense + BM25 + RRF)
-- Query Rewriting
+- Hybrid Search (Dense + BM25 + Reciprocal Rank Fusion)
 - AI-powered answer generation with Groq LLM
 - Streaming responses
 - Session-based chat memory
-- Confidence score
 - Document management (List & Delete)
-- Docker support
+- Docker & Docker Compose support
 
 ---
 
@@ -21,15 +19,15 @@ QueryX is an AI-powered Retrieval-Augmented Generation (RAG) application that al
 
 **Backend**
 - FastAPI
-- Python
+- Python 3.11+
 - Qdrant
-- Sentence Transformers
-- Groq LLM
+- Sentence Transformers (`BAAI/bge-small-en-v1.5`)
+- Groq LLM (via OpenAI-compatible SDK)
 
 **Frontend**
 - HTML
 - CSS
-- JavaScript
+- Vanilla JavaScript
 
 **Deployment**
 - Docker
@@ -43,17 +41,17 @@ QueryX is an AI-powered Retrieval-Augmented Generation (RAG) application that al
 User
  │
  ▼
-Frontend
- │
+Frontend (Nginx)
+ │  /api/*
  ▼
-FastAPI
+FastAPI Backend
  │
- ├── Query Rewriter
  ├── Hybrid Retrieval (Dense + BM25 + RRF)
+ ├── Session Memory
  ├── Groq LLM
  │
  ▼
-Qdrant
+Qdrant Vector Store
 ```
 
 ---
@@ -65,35 +63,58 @@ QueryX/
 │
 ├── backend/
 │   ├── app/
+│   │   ├── api/            # FastAPI route handlers
+│   │   ├── core/           # Configuration and logging
+│   │   ├── db/             # Qdrant client & collection management
+│   │   ├── llm/            # Groq client & prompt builder
+│   │   ├── memory/         # Session conversation memory
+│   │   ├── rag/            # Chunker, embeddings, BM25, RRF, hybrid pipeline
+│   │   ├── schemas/        # Pydantic request/response models
+│   │   ├── services/       # Document, search, and cleanup services
+│   │   ├── utils/          # PDF and text helpers
+│   │   └── main.py         # FastAPI application entrypoint
+│   ├── tests/              # Unit tests
+│   ├── .env.example        # Environment variable template
+│   ├── .dockerignore
 │   ├── Dockerfile
-│   ├── requirements.txt
-│   └── .env
+│   └── requirements.txt
 │
 ├── frontend/
 │   ├── css/
+│   │   └── style.css
 │   ├── js/
-│   ├── index.html
+│   │   ├── api.js          # Backend API client
+│   │   ├── app.js          # Core UI state, views, and file sidebar
+│   │   ├── chat.js         # Chat rendering and streaming
+│   │   ├── documents.js    # Initial document sync
+│   │   └── upload.js       # PDF upload & cancellation lifecycle
+│   ├── .dockerignore
 │   ├── Dockerfile
+│   ├── index.html
 │   └── nginx.conf
 │
+├── uploads/                # Ignored local upload placeholder (.gitkeep)
+├── .gitignore
 └── docker-compose.yml
 ```
 
 ---
 
-## Installation
+## Installation (Local Development)
 
-Clone the repository
+Clone the repository:
 
 ```bash
 git clone https://github.com/yourusername/queryx.git
-cd queryx
+cd QueryX
 ```
 
 ### Backend
 
 ```bash
 cd backend
+cp .env.example .env
+# Edit .env with your Groq API key and QDRANT_URL (e.g. http://localhost:6333)
 
 python -m venv venv
 
@@ -104,35 +125,29 @@ venv\Scripts\activate
 source venv/bin/activate
 
 pip install -r requirements.txt
-
 uvicorn app.main:app --reload
 ```
 
-Backend:
-
-```
-http://localhost:8000
-```
-
-API Docs:
-
-```
-http://localhost:8000/docs
-```
+Backend: `http://localhost:8000`  
+API Docs: `http://localhost:8000/docs`
 
 ### Frontend
 
-Open `frontend/index.html` or serve it using any static web server.
+Serve `frontend/` behind Nginx (or any static server that proxies `/api/` to the backend).
 
 ---
 
 ## Docker
 
+Create `backend/.env` from `backend/.env.example`, then run:
+
 ```bash
 docker compose build
-
 docker compose up -d
 ```
+
+Frontend: `http://localhost:3000`  
+Backend: `http://localhost:8000`
 
 Stop:
 
@@ -144,11 +159,17 @@ docker compose down
 
 ## Environment Variables
 
+See `backend/.env.example`:
+
 ```env
-GROQ_API_KEY=your_api_key
+HOST=0.0.0.0
+PORT=8000
 QDRANT_URL=http://qdrant:6333
 COLLECTION_NAME=queryx_documents
+API_KEY=your_groq_api_key
+CHAT_MODEL=llama-3.3-70b-versatile
 EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+HYBRID_TOP_K=20
 ```
 
 ---
@@ -157,10 +178,12 @@ EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/upload` | Upload PDF |
+| POST | `/api/upload` | Upload & index PDF |
+| POST | `/api/upload/cancel/{upload_id}` | Cancel active upload processing |
+| POST | `/api/upload/stream` | Upload PDF with NDJSON progress stream |
 | POST | `/api/chat` | Ask questions |
-| GET | `/api/documents` | List documents |
+| POST | `/api/chat/stream` | Stream chat response |
+| GET | `/api/search` | Semantic search over chunks |
+| GET | `/api/documents` | List indexed documents |
 | DELETE | `/api/documents/{id}` | Delete document |
 | GET | `/health` | Health check |
-
----

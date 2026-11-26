@@ -1,20 +1,19 @@
 from app.core.config import COLLECTION_NAME
-from app.db.qdrant import client
+from app.db.qdrant import get_qdrant_client
 from app.rag.embeddings import embed_text
 from app.rag.filters import build_filter
 from app.schemas.retrieval import RetrievedChunk
 
 
-def retrieve(query: str, limit: int = 5, document_ids: list[str] | None = None):
-
-    """
-    Search Qdrant for the most relevant chunks.
-    """
-
+def retrieve(
+    query: str,
+    limit: int = 5,
+    document_ids: list[str] | None = None,
+) -> list[RetrievedChunk]:
+    """Search Qdrant for the most semantically relevant chunks."""
     query_vector = embed_text(query)
     search_filter = build_filter(document_ids)
-    results = client.query_points(
-
+    results = get_qdrant_client().query_points(
         collection_name=COLLECTION_NAME,
         query=query_vector,
         query_filter=search_filter,
@@ -31,7 +30,7 @@ def retrieve(query: str, limit: int = 5, document_ids: list[str] | None = None):
             text=point.payload["text"],
             page=point.payload.get("page"),
             collection=point.payload.get("collection"),
-            source=point.payload.get("source")
+            source=point.payload.get("source"),
         )
         for point in results.points
     ]

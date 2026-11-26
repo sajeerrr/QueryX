@@ -12,6 +12,19 @@ function renderMarkdown(text) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
+    // Protect code blocks and inline code before running emphasis rules
+    const codeTokens = [];
+    html = html.replace(/```([\s\S]*?)```/g, (_, code) => {
+        const token = `\u0000CODE${codeTokens.length}\u0000`;
+        codeTokens.push(`<pre><code>${code}</code></pre>`);
+        return token;
+    });
+    html = html.replace(/`([^`\n]+)`/g, (_, code) => {
+        const token = `\u0000CODE${codeTokens.length}\u0000`;
+        codeTokens.push(`<code>${code}</code>`);
+        return token;
+    });
+
     // Bold: **text** or __text__
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
@@ -20,14 +33,11 @@ function renderMarkdown(text) {
     html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
     html = html.replace(/_(.*?)_/g, '<em>$1</em>');
 
-    // Code blocks: ```code```
-    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-
-    // Inline code: `code`
-    html = html.replace(/`(.*?)`/g, '<code>$1</code>');
-
     // Line breaks
     html = html.replace(/\n/g, '<br>');
+
+    // Restore protected code spans
+    html = html.replace(/\u0000CODE(\d+)\u0000/g, (_, index) => codeTokens[Number(index)]);
 
     return html;
 }

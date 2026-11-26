@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
+from app.rag.pipeline import pipeline
 from app.schemas.chat import ChatRequest
-from app.rag.pipeline.pipeline import pipeline
 
 router = APIRouter()
 
@@ -17,11 +17,10 @@ def chat(request: ChatRequest):
 
 @router.post("/chat/stream")
 def chat_stream(request: ChatRequest):
-
     return StreamingResponse(
         pipeline.run_stream(
             session_id=request.session_id,
             question=request.question,
         ),
-        media_type="text/event-stream",
+        media_type="text/plain; charset=utf-8",
     )

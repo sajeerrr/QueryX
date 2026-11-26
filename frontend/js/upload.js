@@ -148,8 +148,9 @@ function showUploadCancelledView(fileName) {
         <div class="welcome-card">
             <div class="welcome-icon-wrap">✓</div>
             <h3 class="welcome-title">Processing stopped</h3>
-            <p class="welcome-sub">${fileName} was not added. You can choose another PDF whenever you’re ready.</p>
+            <p class="welcome-sub"><span class="cancelled-file-name"></span> was not added. You can choose another PDF whenever you’re ready.</p>
         </div>`;
+    messages.querySelector(".cancelled-file-name").textContent = fileName || "Your file";
 }
 
 /**
@@ -173,7 +174,8 @@ window.startUpload = async function(file) {
 
     uploadInProgress = true;
     const controller = new AbortController();
-    const uploadId = crypto.randomUUID();
+    const uploadId = generateId();
+
     activeUpload = { controller, uploadId, cancelled: false };
     console.info("[QueryX upload] UI processing started", { name: file.name, bytes: file.size });
     // Prevent the initial /documents request from restoring the upload screen

@@ -1,32 +1,32 @@
+import threading
 from rank_bm25 import BM25Okapi
 
-from app.db.qdrant import client
 from app.core.config import COLLECTION_NAME
-from app.schemas.retrieval import RetrievedChunk
 from app.core.logger import logger
+from app.db.qdrant import get_qdrant_client
+from app.schemas.retrieval import RetrievedChunk
 
 
 class BM25Index:
+    """Thread-safe in-memory BM25 lexical index backed by Qdrant payloads."""
 
     def __init__(self):
+        self._lock = threading.RLock()
+        self.index: BM25Okapi | None = None
+        self.documents: list[list[str]] = []
+        self.metadata: list[RetrievedChunk] = []
 
-        self.index = None
-        self.documents = []
-        self.metadata = []
-
-    def rebuild(self):
-
+    def rebuild(self) -> None:
+        """Rebuild the BM25 index from all points currently stored in Qdrant."""
         logger.info("Building BM25 index...")
+        qdrant_client = get_qdrant_client()
 
-        self.documents.clear()
-        self.metadata.clear()
-
+        documents: list[list[str]] = []
+        metadata: list[RetrievedChunk] = []
         offset = None
 
         while True:
-
-            points, offset = client.scroll(
-
+            points, offset = qdrant_client.scroll(
                 collection_name=COLLECTION_NAME,
                 limit=1000,
                 offset=offset,
@@ -35,22 +35,16 @@ class BM25Index:
             )
 
             for point in points:
-
-                payload = point.payload
-
-                self.documents.append(
-                    payload["text"].lower().split()
-                )
-
-                self.metadata.append(
-
+                payload = point.payload or {}
+                text = payload.get("text", "")
+                documents.append(text.lower().split())
+                metadata.append(
                     RetrievedChunk(
-
                         score=0.0,
                         document_id=payload["document_id"],
                         filename=payload["filename"],
                         chunk_id=payload["chunk_id"],
-                        text=payload["text"],
+                        text=text,
                         page=payload.get("page"),
                         collection=payload.get("collection"),
                         source=payload.get("source"),
@@ -60,38 +54,52 @@ class BM25Index:
             if offset is None:
                 break
 
-        if self.documents:
+        new_index = BM25Okapi(documents) if documents else None
+        with self._lock:
+            self.documents = documents
+            self.metadata = metadata
+            self.index = new_index
 
-            self.index = BM25Okapi(self.documents)
-            logger.info(f"BM25 indexed {len(self.documents)} chunks")
-
+        if documents:
+            logger.info("BM25 indexed %d chunks", len(documents))
         else:
-
-            self.index = None
             logger.warning("BM25 index is empty")
 
-    def search(self, query: str, limit: int = 10):
+    def search(
+        self,
+        query: str,
+        limit: int = 10,
+        document_ids: list[str] | None = None,
+    ) -> list[RetrievedChunk]:
+        """Return top BM25 matches without mutating stored chunk metadata."""
+        with self._lock:
+            index = self.index
+            documents = self.documents
+            metadata = self.metadata
 
-        if self.index is None:
+        if index is None or not metadata:
             return []
 
         tokens = query.lower().split()
-        scores = self.index.get_scores(tokens)
-        ranked = sorted(
+        if not tokens:
+            return []
 
-            zip(scores, self.metadata),
-            key=lambda x: x[0],
-            reverse=True,
-        )
+        token_set = set(tokens)
+        scores = index.get_scores(tokens)
+        allowed_ids = set(document_ids) if document_ids else None
 
-        results = []
+        candidates = [
+            (float(score), chunk)
+            for score, doc_tokens, chunk in zip(scores, documents, metadata)
+            if (allowed_ids is None or chunk.document_id in allowed_ids)
+            and (score > 0 or bool(token_set.intersection(doc_tokens)))
+        ]
+        candidates.sort(key=lambda item: item[0], reverse=True)
 
-        for score, chunk in ranked[:limit]:
-
-            chunk.score = float(score)
-            results.append(chunk)
-
-        return results
+        return [
+            chunk.model_copy(update={"score": score})
+            for score, chunk in candidates[:limit]
+        ]
 
 
 bm25_index = BM25Index()
