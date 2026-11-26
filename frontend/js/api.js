@@ -221,3 +221,26 @@ async function deleteDocument(id) {
     }
     return response.json();
 }
+
+function clearDocumentsOnUnload(documentIds = []) {
+    const payload = JSON.stringify({
+        session_id: getSessionId(),
+        document_ids: documentIds,
+        clear_all: true
+    });
+    const url = `${API}/documents/clear`;
+
+    // text/plain avoids a CORS preflight request so sendBeacon succeeds during tab close.
+    if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: "text/plain;charset=UTF-8" });
+        if (navigator.sendBeacon(url, blob)) {
+            return;
+        }
+    }
+
+    fetch(url, {
+        method: "POST",
+        body: payload,
+        keepalive: true
+    }).catch(() => {});
+}

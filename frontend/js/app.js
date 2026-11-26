@@ -275,3 +275,29 @@ if (attachBtn) {
 
 // ── Initial render ──
 renderFileList();
+
+// ── Delete uploaded documents from DB when closing/leaving the app ──
+let _cleanupBeaconSent = false;
+
+function handleAppClose() {
+    if (_cleanupBeaconSent) return;
+    _cleanupBeaconSent = true;
+
+    if (typeof window.cancelCurrentUpload === "function") {
+        window.cancelCurrentUpload().catch(() => {});
+    }
+
+    const documentIds = uploadedFiles
+        .map(f => f.id)
+        .filter(id => id && !String(id).startsWith("__"));
+
+    if (typeof clearDocumentsOnUnload === "function") {
+        clearDocumentsOnUnload(documentIds);
+    }
+}
+
+window.addEventListener("pagehide", handleAppClose);
+window.addEventListener("beforeunload", handleAppClose);
+window.addEventListener("pageshow", () => {
+    _cleanupBeaconSent = false;
+});

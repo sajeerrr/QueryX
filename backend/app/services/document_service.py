@@ -6,7 +6,7 @@ from pathlib import Path
 from time import perf_counter
 
 from fastapi import HTTPException
-from qdrant_client.http.models import FieldCondition, Filter, MatchValue
+from qdrant_client.http.models import FieldCondition, Filter, MatchAny, MatchValue
 
 from app.core.config import COLLECTION_NAME, UPLOAD_DIR
 from app.core.logger import logger
@@ -16,9 +16,6 @@ from app.rag.chunker import ChunkingCancelled, chunk_text
 from app.rag.indexer import index_document
 from app.utils.pdf import extract_text
 from app.utils.text import clean_text
-
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-logger.info("DOCUMENT STORAGE | upload directory=%s", UPLOAD_DIR)
 
 _processing_jobs: dict[str, threading.Event] = {}
 _processing_jobs_lock = threading.Lock()
@@ -68,7 +65,7 @@ def list_documents() -> list[dict]:
 
 
 def delete_document(document_id: str, rebuild_bm25: bool = True) -> dict:
-    """Delete a document from Qdrant, remove its stored PDF if unused, and refresh BM25."""
+    """Delete a single document from Qdrant and refresh BM25."""
     qdrant_client = get_qdrant_client()
     doc_filter = Filter(
         must=[
@@ -79,27 +76,10 @@ def delete_document(document_id: str, rebuild_bm25: bool = True) -> dict:
         ]
     )
 
-    # Look up filename before deleting vectors so we can clean up the stored file if safe.
-    points, _ = qdrant_client.scroll(
-        collection_name=COLLECTION_NAME,
-        scroll_filter=doc_filter,
-        limit=1,
-        with_payload=True,
-        with_vectors=False,
-    )
-    filename = points[0].payload.get("filename") if points and points[0].payload else None
-
     qdrant_client.delete(
         collection_name=COLLECTION_NAME,
         points_selector=doc_filter,
     )
-
-    if filename:
-        safe_path = UPLOAD_DIR / sanitize_filename(filename)
-        try:
-            safe_path.unlink(missing_ok=True)
-        except OSError as exc:
-            logger.warning("DOCUMENT | failed to remove file on delete | path=%s | error=%s", safe_path, exc)
 
     if rebuild_bm25:
         threading.Thread(target=bm25_index.rebuild, daemon=True).start()
@@ -110,15 +90,51 @@ def delete_document(document_id: str, rebuild_bm25: bool = True) -> dict:
     }
 
 
-def _save_upload_file(filename: str, data: bytes) -> Path:
-    filepath = UPLOAD_DIR / sanitize_filename(filename)
-    try:
-        with open(filepath, "wb") as f:
-            f.write(data)
-        logger.info("DOCUMENT | file saved | filename=%r | path=%s", filename, filepath)
-    except Exception:
-        logger.exception("DOCUMENT | failed to save upload | filename=%r | path=%s", filename, filepath)
-    return filepath
+def delete_documents(document_ids: list[str], rebuild_bm25: bool = True) -> dict:
+    """Delete multiple documents from Qdrant and refresh BM25."""
+    unique_ids = [doc_id for doc_id in dict.fromkeys(document_ids) if doc_id]
+    if not unique_ids:
+        return {"deleted": 0}
+
+    qdrant_client = get_qdrant_client()
+    qdrant_client.delete(
+        collection_name=COLLECTION_NAME,
+        points_selector=Filter(
+            must=[
+                FieldCondition(
+                    key="document_id",
+                    match=MatchAny(any=unique_ids),
+                )
+            ]
+        ),
+    )
+
+    if rebuild_bm25:
+        bm25_index.rebuild()
+
+    logger.info("DOCUMENT | deleted %d session document(s) from Qdrant", len(unique_ids))
+    return {"deleted": len(unique_ids)}
+
+
+def clear_all_documents() -> dict:
+    """Delete all points in the Qdrant collection, clear BM25, and remove temp uploads."""
+    qdrant_client = get_qdrant_client()
+    qdrant_client.delete(
+        collection_name=COLLECTION_NAME,
+        points_selector=Filter(),
+    )
+    bm25_index.clear()
+
+    if UPLOAD_DIR.exists():
+        for filepath in UPLOAD_DIR.iterdir():
+            if filepath.is_file():
+                try:
+                    filepath.unlink(missing_ok=True)
+                except OSError as exc:
+                    logger.warning("DOCUMENT | failed to remove temp upload | path=%s | error=%s", filepath, exc)
+
+    logger.info("DOCUMENT | cleared all documents from Qdrant, BM25, and temp uploads")
+    return {"cleared": True}
 
 
 def _extract_and_clean(data: bytes) -> str:
@@ -129,7 +145,7 @@ def _extract_and_clean(data: bytes) -> str:
     return text
 
 
-def _rollback_partial_document(filename: str, document_id: str | None, filepath: Path | None = None) -> None:
+def _rollback_partial_document(filename: str, document_id: str | None) -> None:
     if not document_id:
         return
     try:
@@ -137,13 +153,6 @@ def _rollback_partial_document(filename: str, document_id: str | None, filepath:
         logger.info("DOCUMENT | deleted partial document | filename=%r | document_id=%s", filename, document_id)
     except Exception:
         logger.exception("DOCUMENT | failed to delete partial document | filename=%r | document_id=%s", filename, document_id)
-
-    if filepath is not None:
-        try:
-            filepath.unlink(missing_ok=True)
-            logger.info("DOCUMENT | removed cancelled upload file | path=%s", filepath)
-        except OSError:
-            logger.warning("DOCUMENT | could not remove cancelled upload | path=%s", filepath)
 
 
 def begin_processing(upload_id: str | None) -> threading.Event | None:
@@ -181,22 +190,18 @@ def process_document(
     logger.info("DOCUMENT | started regular processing | filename=%r | bytes=%d", safe_name, len(data))
 
     document_id = str(uuid.uuid4())
-    filepath = _save_upload_file(safe_name, data)
 
     def check_cancelled(document_id_for_cleanup: str | None = None) -> None:
         if cancel_event and cancel_event.is_set():
             logger.info("DOCUMENT | cancellation requested | filename=%r | document_id=%s", safe_name, document_id_for_cleanup)
             if document_id_for_cleanup:
-                _rollback_partial_document(safe_name, document_id_for_cleanup, filepath)
-            else:
-                filepath.unlink(missing_ok=True)
+                _rollback_partial_document(safe_name, document_id_for_cleanup)
             raise DocumentProcessingCancelled()
 
     check_cancelled(document_id)
     try:
         text = _extract_and_clean(data)
     except ValueError as e:
-        filepath.unlink(missing_ok=True)
         logger.warning("DOCUMENT | PDF extraction failed | filename=%r | error=%s", safe_name, e)
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -212,7 +217,6 @@ def process_document(
     logger.info("DOCUMENT | chunking finished | filename=%r | elapsed_seconds=%.2f", safe_name, perf_counter() - chunking_started_at)
 
     if not chunks:
-        filepath.unlink(missing_ok=True)
         logger.warning("DOCUMENT | no chunks created | filename=%r", safe_name)
         raise HTTPException(status_code=400, detail="Could not extract text chunks from the document.")
 
@@ -231,7 +235,7 @@ def process_document(
 
     if cancel_event and cancel_event.is_set():
         logger.info("DOCUMENT | cancellation was requested after indexing started | filename=%r | document_id=%s", safe_name, document_id)
-        _rollback_partial_document(safe_name, document_id, filepath)
+        _rollback_partial_document(safe_name, document_id)
         raise DocumentProcessingCancelled()
 
     return {
@@ -247,7 +251,7 @@ def process_document(
 
 
 async def process_document_stream(filename: str, data: bytes):
-    """Asynchronously process a PDF and yield NDJSON progress events."""
+    """Asynchronously process a PDF in memory and yield NDJSON progress events."""
     started_at = perf_counter()
     safe_name = sanitize_filename(filename)
     logger.info("DOCUMENT STREAM | processing started | filename=%r | bytes=%d", safe_name, len(data))
@@ -260,12 +264,9 @@ async def process_document_stream(filename: str, data: bytes):
         }) + "\n"
         await asyncio.sleep(0.05)
 
-        filepath = _save_upload_file(safe_name, data)
-
         try:
             text = _extract_and_clean(data)
         except ValueError as e:
-            filepath.unlink(missing_ok=True)
             logger.warning("DOCUMENT STREAM | PDF extraction failed | filename=%r | error=%s", safe_name, e)
             yield json.dumps({"stage": "error", "message": str(e)}) + "\n"
             return
@@ -285,7 +286,6 @@ async def process_document_stream(filename: str, data: bytes):
         logger.info("DOCUMENT STREAM | chunking finished | filename=%r | elapsed_seconds=%.2f", safe_name, perf_counter() - chunking_started_at)
 
         if not chunks:
-            filepath.unlink(missing_ok=True)
             logger.warning("DOCUMENT STREAM | no chunks created | filename=%r", safe_name)
             yield json.dumps({"stage": "error", "message": "Could not extract text chunks from the document."}) + "\n"
             return

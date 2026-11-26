@@ -14,7 +14,7 @@ from app.rag.bm25_index import BM25Index
 from app.rag.chunker import ChunkingCancelled, chunk_text
 from app.rag.rrf import reciprocal_rank_fusion
 from app.schemas.retrieval import RetrievedChunk
-from app.services.document_service import sanitize_filename
+from app.services.document_service import clear_all_documents, delete_documents, sanitize_filename
 from app.utils.text import clean_text
 
 
@@ -72,6 +72,26 @@ class TestQueryXModules(unittest.TestCase):
         self.assertEqual(sanitize_filename("../../etc/passwd.pdf"), "passwd.pdf")
         self.assertEqual(sanitize_filename(None), "document.pdf")
 
+    def test_clear_all_documents_wipes_qdrant_and_bm25(self):
+        fake_client = MagicMock()
+        with patch("app.services.document_service.get_qdrant_client", return_value=fake_client), \
+             patch("app.services.document_service.bm25_index.clear") as mock_clear:
+            result = clear_all_documents()
+
+        self.assertEqual(result, {"cleared": True})
+        fake_client.delete.assert_called_once()
+        mock_clear.assert_called_once()
+
+    def test_delete_documents_deletes_unique_ids(self):
+        fake_client = MagicMock()
+        with patch("app.services.document_service.get_qdrant_client", return_value=fake_client), \
+             patch("app.services.document_service.bm25_index.rebuild") as mock_rebuild:
+            result = delete_documents(["doc-1", "doc-1", "doc-2"])
+
+        self.assertEqual(result, {"deleted": 2})
+        fake_client.delete.assert_called_once()
+        mock_rebuild.assert_called_once()
+
     def test_memory_and_prompt_builder(self):
         mgr = MemoryManager()
         sid = "test-session-1"
@@ -98,6 +118,7 @@ class TestQueryXModules(unittest.TestCase):
             "/api/search",
             "/api/documents",
             "/api/documents/{document_id}",
+            "/api/documents/clear",
         ):
             self.assertIn(expected, paths)
 

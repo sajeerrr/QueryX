@@ -186,4 +186,5 @@ HYBRID_TOP_K=20
 | GET | `/api/search` | Semantic search over chunks |
 | GET | `/api/documents` | List indexed documents |
 | DELETE | `/api/documents/{id}` | Delete document |
+| POST | `/api/documents/clear` | Clear session/all documents on close |
 | GET | `/health` | Health check |

@@ -65,6 +65,14 @@ class BM25Index:
         else:
             logger.warning("BM25 index is empty")
 
+    def clear(self) -> None:
+        """Clear the in-memory BM25 index."""
+        with self._lock:
+            self.documents = []
+            self.metadata = []
+            self.index = None
+        logger.info("BM25 index cleared")
+
     def search(
         self,
         query: str,

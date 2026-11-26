@@ -17,6 +17,7 @@ CHAT_MODEL = os.getenv("CHAT_MODEL", "llama-3.3-70b-versatile")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 
 HYBRID_TOP_K = int(os.getenv("HYBRID_TOP_K", 20))
+EPHEMERAL_DOCUMENTS = os.getenv("EPHEMERAL_DOCUMENTS", "true").lower() in ("1", "true", "yes")
 
 # Upload directory for PDF files
 UPLOAD_DIR = Path(os.getenv("QUERYX_UPLOAD_DIR", Path(tempfile.gettempdir()) / "queryx_uploads"))
