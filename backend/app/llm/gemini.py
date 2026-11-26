@@ -1,14 +1,16 @@
 import threading
 from openai import OpenAI
 
-from app.core.config import API_KEY, CHAT_MODEL
+from app.core.config import CHAT_MODEL, GEMINI_API_KEY
+
+GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 _client: OpenAI | None = None
 _client_lock = threading.Lock()
 
 
-def _get_client() -> OpenAI:
-    """Return a lazily initialized OpenAI-compatible Groq client."""
+def get_gemini_client() -> OpenAI:
+    """Return a lazily initialized OpenAI-compatible Gemini API client."""
     global _client
     if _client is not None:
         return _client
@@ -17,12 +19,14 @@ def _get_client() -> OpenAI:
         if _client is not None:
             return _client
 
-        if not API_KEY:
-            raise RuntimeError("API_KEY (or GROQ_API_KEY) environment variable is not configured.")
+        if not GEMINI_API_KEY:
+            raise RuntimeError("GEMINI_API_KEY (or API_KEY) environment variable is not configured.")
 
         _client = OpenAI(
-            api_key=API_KEY,
-            base_url="https://api.groq.com/openai/v1",
+            api_key=GEMINI_API_KEY,
+            base_url=GEMINI_OPENAI_BASE_URL,
+            max_retries=3,
+            timeout=30.0,
         )
         return _client
 
@@ -35,18 +39,18 @@ def _build_messages(prompt: str, system_prompt: str) -> list[dict[str, str]]:
 
 
 def generate(prompt: str, system_prompt: str) -> str:
-    """Generate a complete response from the configured Groq chat model."""
-    response = _get_client().chat.completions.create(
+    """Generate a complete response from the configured Gemini chat model."""
+    response = get_gemini_client().chat.completions.create(
         model=CHAT_MODEL,
         messages=_build_messages(prompt, system_prompt),
         temperature=0,
     )
-    return response.choices[0].message.content.strip()
+    return (response.choices[0].message.content or "").strip()
 
 
 def generate_stream(prompt: str, system_prompt: str):
-    """Stream the LLM response token by token."""
-    stream = _get_client().chat.completions.create(
+    """Stream the Gemini LLM response token by token."""
+    stream = get_gemini_client().chat.completions.create(
         model=CHAT_MODEL,
         messages=_build_messages(prompt, system_prompt),
         temperature=0,

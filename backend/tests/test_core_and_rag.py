@@ -7,11 +7,13 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from app.db.qdrant import ensure_collection
 from app.llm.prompt import build_prompt
 from app.main import app
 from app.memory import MemoryManager, MemoryStore
 from app.rag.bm25_index import BM25Index
 from app.rag.chunker import ChunkingCancelled, chunk_text
+from app.rag.embeddings import embed_text, embed_texts
 from app.rag.rrf import reciprocal_rank_fusion
 from app.schemas.retrieval import RetrievedChunk
 from app.services.document_service import clear_all_documents, delete_documents, sanitize_filename
@@ -71,6 +73,37 @@ class TestQueryXModules(unittest.TestCase):
     def test_sanitize_filename_strips_path_traversal(self):
         self.assertEqual(sanitize_filename("../../etc/passwd.pdf"), "passwd.pdf")
         self.assertEqual(sanitize_filename(None), "document.pdf")
+
+    def test_gemini_embeddings_single_and_batched(self):
+        fake_client = MagicMock()
+        fake_client.embeddings.create.side_effect = [
+            MagicMock(data=[MagicMock(embedding=[0.1, 0.2], index=0)]),
+            MagicMock(data=[MagicMock(embedding=[0.5, 0.6], index=1), MagicMock(embedding=[0.3, 0.4], index=0)]),
+            MagicMock(data=[MagicMock(embedding=[0.7, 0.8], index=None), MagicMock(embedding=[0.9, 1.0], index=None)]),
+        ]
+        with patch("app.rag.embeddings.get_gemini_client", return_value=fake_client):
+            single = embed_text("hello")
+            batched = embed_texts(["first", "second"])
+            batched_no_idx = embed_texts(["a", "b"])
+
+        self.assertEqual(single, [0.1, 0.2])
+        self.assertEqual(batched, [[0.3, 0.4], [0.5, 0.6]])
+        self.assertEqual(batched_no_idx, [[0.7, 0.8], [0.9, 1.0]])
+
+    def test_ensure_collection_recreates_on_dimension_mismatch(self):
+        fake_client = MagicMock()
+        coll = MagicMock()
+        coll.name = "queryx_documents"
+        fake_client.get_collections.return_value = MagicMock(collections=[coll])
+        fake_client.get_collection.return_value = MagicMock(
+            config=MagicMock(params=MagicMock(vectors=MagicMock(size=384)))
+        )
+
+        with patch("app.db.qdrant.get_qdrant_client", return_value=fake_client):
+            ensure_collection(retries=1)
+
+        fake_client.delete_collection.assert_called_once_with("queryx_documents")
+        fake_client.create_collection.assert_called_once()
 
     def test_clear_all_documents_wipes_qdrant_and_bm25(self):
         fake_client = MagicMock()

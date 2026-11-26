@@ -27,6 +27,11 @@ async def upload_pdf(
         return await run_in_threadpool(process_document, file.filename, content, cancel_event)
     except DocumentProcessingCancelled:
         raise HTTPException(status_code=409, detail="Document processing was cancelled.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("UPLOAD API | processing failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Document processing failed: {exc}")
     finally:
         finish_processing(x_upload_id)
 

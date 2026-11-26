@@ -1,15 +1,15 @@
 # QueryX
 
-QueryX is a full-stack Retrieval-Augmented Generation (RAG) web application for chatting with PDF documents. Upload a PDF, ask questions in natural language, and receive streamed, context-grounded answers powered by **Hybrid Search** (Dense Vector Search + BM25 + Reciprocal Rank Fusion) and **Groq LLM**.
+QueryX is a full-stack Retrieval-Augmented Generation (RAG) web application for chatting with PDF documents. Upload a PDF, ask questions in natural language, and receive streamed, context-grounded answers powered by **Hybrid Search** (Dense Vector Search + BM25 + Reciprocal Rank Fusion) and **Google Gemini**.
 
 ---
 
 ## Features
 
 - **In-Memory PDF Ingestion** — Extracts and cleans PDF text with PyMuPDF (`fitz`) and splits it into overlapping semantic chunks (`800` chars, `160` overlap) without saving raw PDFs to disk.
-- **Fast Preloaded Embeddings** — Uses `BAAI/bge-small-en-v1.5` via Sentence Transformers, preloaded from local cache at server startup for sub-second document indexing.
+- **Gemini Embeddings & Chat** — Uses `gemini-embedding-001` (default `768` dimensions via MRL) for vector embeddings and `gemini-3.1-flash-lite` for fast, streamed answers via the Gemini OpenAI-compatible API.
 - **Hybrid Search + RRF** — Combines dense semantic search in **Qdrant** with thread-safe **BM25** lexical search (`rank-bm25`), merged via **Reciprocal Rank Fusion (RRF)**.
-- **Streaming Answers & Session Memory** — Streams responses token-by-token from **Groq** (`llama-3.3-70b-versatile` by default) while maintaining per-session conversation history.
+- **Session Conversation Memory** — Maintains per-session chat history for follow-up questions.
 - **Ephemeral Document Lifecycle** — Automatically clears uploaded document vectors, BM25 index, and session memory when you close the browser tab (`pagehide` / `beforeunload` beacon) or stop/restart the backend (`EPHEMERAL_DOCUMENTS=true`).
 - **Upload Cancellation** — Supports stopping in-progress document uploads mid-flight with automatic rollback.
 - **Docker & Local Dev Ready** — Runs seamlessly via Docker Compose (Nginx + FastAPI + Qdrant) or locally with `uvicorn` and a static frontend server (e.g. VS Code Live Server).
@@ -22,10 +22,10 @@ QueryX is a full-stack Retrieval-Augmented Generation (RAG) web application for 
 |-------|------------|
 | **Backend API** | FastAPI, Uvicorn, Python 3.11+ |
 | **Vector Database** | Qdrant (`qdrant-client`) |
-| **Embeddings** | Sentence Transformers (`BAAI/bge-small-en-v1.5`, 384-dim Cosine) |
+| **Embeddings** | Google Gemini (`gemini-embedding-001`, 768-dim Cosine) |
 | **Lexical Search** | `rank-bm25` (BM25Okapi) + Reciprocal Rank Fusion |
 | **PDF & Chunking** | PyMuPDF (`fitz`), `langchain-text-splitters` |
-| **LLM** | Groq API via OpenAI-compatible SDK |
+| **LLM** | Google Gemini (`gemini-3.1-flash-lite`) via OpenAI-compatible SDK |
 | **Frontend** | Vanilla HTML, CSS, JavaScript |
 | **Deployment** | Docker, Docker Compose, Nginx |
 
@@ -40,8 +40,8 @@ QueryX is a full-stack Retrieval-Augmented Generation (RAG) web application for 
      │
      ▼
   FastAPI Backend
-     ├── /api/upload        ──► PyMuPDF ──► Chunker ──► Embeddings ──► Qdrant + BM25
-     ├── /api/chat(/stream) ──► Hybrid Search (Qdrant + BM25 + RRF) ──► Groq LLM
+     ├── /api/upload        ──► PyMuPDF ──► Chunker ──► Gemini Embeddings ──► Qdrant + BM25
+     ├── /api/chat(/stream) ──► Hybrid Search (Qdrant + BM25 + RRF) ──► Gemini LLM
      ├── /api/search        ──► Qdrant Vector Search
      └── /api/documents     ──► List / Delete / Clear (Qdrant + BM25 + Memory)
 ```
@@ -63,16 +63,16 @@ QueryX/
 │   │   │   ├── config.py         # Environment configuration
 │   │   │   └── logger.py         # Structured stdout logging
 │   │   ├── db/
-│   │   │   └── qdrant.py         # Lazy Qdrant client & collection initialization
+│   │   │   └── qdrant.py         # Lazy Qdrant client & dimension-aware collection setup
 │   │   ├── llm/
-│   │   │   ├── groq.py           # Groq completion & streaming client
+│   │   │   ├── gemini.py         # Gemini OpenAI-compatible completion & streaming client
 │   │   │   └── prompt.py         # RAG prompt builder
 │   │   ├── memory/
 │   │   │   └── store.py          # Per-session conversation store & manager
 │   │   ├── rag/
 │   │   │   ├── bm25_index.py     # Thread-safe in-memory BM25 index
 │   │   │   ├── chunker.py        # Recursive character splitter with cancellation
-│   │   │   ├── embeddings.py     # Cached SentenceTransformer wrapper & preloader
+│   │   │   ├── embeddings.py     # Batched Gemini embedding wrapper
 │   │   │   ├── hybrid.py         # Hybrid dense + BM25 + RRF retrieval
 │   │   │   ├── indexer.py        # Qdrant upsert + background BM25 rebuild
 │   │   │   ├── pipeline.py       # End-to-end RAG run & streaming pipeline
@@ -113,13 +113,13 @@ QueryX/
 
 ### Prerequisites
 
-- **Groq API Key** (from [console.groq.com](https://console.groq.com))
+- **Gemini API Key** (from [Google AI Studio](https://aistudio.google.com/))
 - **Docker** (for running Qdrant or the full containerized stack)
 - **Python 3.11+** (if running the backend locally)
 
 ### 1. Configure Environment Variables
 
-Copy the example environment file and add your Groq API key:
+Copy the example environment file and add your Gemini API key:
 
 ```bash
 cp backend/.env.example backend/.env
@@ -132,10 +132,11 @@ PORT=8000
 QDRANT_URL=http://localhost:6333
 COLLECTION_NAME=queryx_documents
 
-# Groq API key (GROQ_API_KEY is also supported)
-API_KEY=your_groq_api_key
-CHAT_MODEL=llama-3.3-70b-versatile
-EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+# Gemini API key (API_KEY is also supported)
+GEMINI_API_KEY=your_gemini_api_key
+CHAT_MODEL=gemini-3.1-flash-lite
+EMBEDDING_MODEL=gemini-embedding-001
+EMBEDDING_DIM=768
 HYBRID_TOP_K=20
 EPHEMERAL_DOCUMENTS=true
 ```
@@ -199,9 +200,10 @@ docker compose down
 | `PORT` | `8000` | Uvicorn bind port |
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant server URL |
 | `COLLECTION_NAME` | `queryx_documents` | Qdrant collection name |
-| `API_KEY` / `GROQ_API_KEY` | — | Groq API key (**required** for chat) |
-| `CHAT_MODEL` | `llama-3.3-70b-versatile` | Groq chat completion model |
-| `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | SentenceTransformer embedding model |
+| `GEMINI_API_KEY` / `API_KEY` | — | Gemini API key (**required** for chat & embeddings) |
+| `CHAT_MODEL` | `gemini-3.1-flash-lite` | Gemini chat completion model |
+| `EMBEDDING_MODEL` | `gemini-embedding-001` | Gemini embedding model |
+| `EMBEDDING_DIM` | `768` | Output embedding vector size (`128`–`3072`) |
 | `HYBRID_TOP_K` | `20` | Candidate chunks fetched per retriever before RRF |
 | `EPHEMERAL_DOCUMENTS` | `true` | Clears Qdrant & BM25 on app startup/shutdown |
 

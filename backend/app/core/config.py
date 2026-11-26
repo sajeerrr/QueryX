@@ -12,9 +12,10 @@ PORT = int(os.getenv("PORT", 8000))
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "queryx_documents")
 
-API_KEY = os.getenv("API_KEY") or os.getenv("GROQ_API_KEY")
-CHAT_MODEL = os.getenv("CHAT_MODEL", "llama-3.3-70b-versatile")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("API_KEY")
+CHAT_MODEL = os.getenv("CHAT_MODEL", "gemini-3.1-flash-lite")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", 768))
 
 HYBRID_TOP_K = int(os.getenv("HYBRID_TOP_K", 20))
 EPHEMERAL_DOCUMENTS = os.getenv("EPHEMERAL_DOCUMENTS", "true").lower() in ("1", "true", "yes")

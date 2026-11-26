@@ -1,4 +1,4 @@
-from app.llm.groq import generate, generate_stream
+from app.llm.gemini import generate, generate_stream
 from app.llm.prompt import build_prompt
 from app.memory import memory_manager
 from app.rag.hybrid import hybrid_search

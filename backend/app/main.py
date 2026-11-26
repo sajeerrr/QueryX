@@ -1,4 +1,3 @@
-import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,7 +11,6 @@ from app.core.config import EPHEMERAL_DOCUMENTS
 from app.core.logger import logger
 from app.db.qdrant import ensure_collection
 from app.rag.bm25_index import bm25_index
-from app.rag.embeddings import preload_embedding_model
 from app.services.document_service import clear_all_documents
 
 
@@ -23,7 +21,6 @@ async def lifespan(app: FastAPI):
         clear_all_documents()
     else:
         bm25_index.rebuild()
-    threading.Thread(target=preload_embedding_model, daemon=True, name="EmbeddingPreload").start()
     try:
         yield
     finally:
