@@ -222,9 +222,11 @@ window.startUpload = async function(file) {
     // Keep the UI animated while the normal upload endpoint performs the
     // complete extraction → chunking → embedding → indexing workflow. Unlike
     // a streamed response, this request cannot lose its final event midway.
-    let visualProgress = 8;
+    let visualProgress = 12;
+    const chatBarInit = document.getElementById("chatProgressBar");
+    if (chatBarInit) chatBarInit.style.width = visualProgress + "%";
     const processingTicker = setInterval(() => {
-        visualProgress = Math.min(visualProgress + (visualProgress < 70 ? 6 : 1.5), 90);
+        visualProgress = Math.min(visualProgress + (visualProgress < 70 ? 8 : 1.5), 90);
         if (progressBar) progressBar.style.width = visualProgress + "%";
         const chatBar = document.getElementById("chatProgressBar");
         if (chatBar) chatBar.style.width = visualProgress + "%";
@@ -234,7 +236,7 @@ window.startUpload = async function(file) {
             const meta = card?.querySelector(".file-bubble-meta");
             if (meta) meta.textContent = visualProgress < 70 ? "Processing…" : "Indexing…";
         }
-    }, 450);
+    }, 200);
 
     try {
         const result = await uploadDocument(file, { signal: controller.signal, uploadId });
