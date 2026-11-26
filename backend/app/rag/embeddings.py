@@ -24,6 +24,7 @@ def embed_text(text: str) -> list[float]:
     embedding = _get_model().encode(
         text,
         normalize_embeddings=True,
+        show_progress_bar=False,
     )
     return embedding.tolist()
 

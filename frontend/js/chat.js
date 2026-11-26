@@ -136,7 +136,7 @@ async function sendQuestion() {
         typingEl.remove();
         row.remove();
 
-        addMessage("Something went wrong.", "ai");
+        addMessage(err?.message || "Something went wrong.", "ai");
 
         console.error(err);
 

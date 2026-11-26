@@ -149,8 +149,20 @@ function showUploadCancelledView(fileName) {
             <div class="welcome-icon-wrap">✓</div>
             <h3 class="welcome-title">Processing stopped</h3>
             <p class="welcome-sub"><span class="cancelled-file-name"></span> was not added. You can choose another PDF whenever you’re ready.</p>
+            <button type="button" class="starter-chip" id="chooseAfterCancelBtn">Choose a PDF</button>
         </div>`;
     messages.querySelector(".cancelled-file-name").textContent = fileName || "Your file";
+    messages.querySelector("#chooseAfterCancelBtn").addEventListener("click", () => {
+        document.getElementById("fileInput")?.click();
+    });
+
+    const questionInput = document.getElementById("question");
+    const sendBtn = document.getElementById("sendBtn");
+    if (questionInput) {
+        questionInput.disabled = false;
+        questionInput.placeholder = "Ask anything about your document…";
+    }
+    if (sendBtn) sendBtn.disabled = false;
 }
 
 /**
@@ -339,7 +351,7 @@ window.startUpload = async function(file) {
     } finally {
         clearInterval(processingTicker);
         uploadInProgress = false;
-        if (uploadBtn) uploadBtn.disabled = false;
+        if (uploadBtn) uploadBtn.disabled = true;
         if (uploadBtnText) uploadBtnText.textContent = "Select a PDF first";
         const newChatBtn = document.getElementById("navNewChat");
         if (newChatBtn) newChatBtn.disabled = false;

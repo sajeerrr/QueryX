@@ -1,5 +1,14 @@
-// Use the same loopback host as the page.
-const API = "/api";
+// Route to the FastAPI backend on port 8000 when served from a local static
+// dev server (e.g. VS Code Live Server on :5500), and use the /api proxy
+// when served behind Nginx/Docker.
+const API = (() => {
+    const { protocol, hostname, port } = window.location;
+    if (protocol === "file:" || ["5500", "5501", "5502", "5173", "4173", "8080", "5000"].includes(port)) {
+        const scheme = protocol === "file:" ? "http:" : protocol;
+        return `${scheme}//${hostname || "127.0.0.1"}:8000/api`;
+    }
+    return "/api";
+})();
 
 // Generate a unique ID with a fallback for browsers that don't support crypto.randomUUID()
 function generateId() {
@@ -31,8 +40,12 @@ function newSession() {
     return sessionId;
 }
 
-async function uploadDocument(file, { signal, uploadId } = {}){
+async function _readErrorDetail(response, fallback) {
+    const errData = await response.json().catch(() => ({}));
+    return errData.detail || `${fallback} (status ${response.status})`;
+}
 
+async function uploadDocument(file, { signal, uploadId } = {}) {
     const formData = new FormData();
     formData.append("file", file);
     console.info("[QueryX upload] sending reliable upload request", {
@@ -40,6 +53,7 @@ async function uploadDocument(file, { signal, uploadId } = {}){
         bytes: file.size,
         endpoint: `${API}/upload`
     });
+
     let response;
     try {
         response = await fetch(`${API}/upload`, {
@@ -49,14 +63,18 @@ async function uploadDocument(file, { signal, uploadId } = {}){
             headers: uploadId ? { "X-Upload-Id": uploadId } : undefined
         });
     } catch (error) {
+        if (error && error.name === "AbortError") {
+            throw error;
+        }
         console.error("[QueryX upload] request could not reach the backend", error);
         throw new Error("Could not connect to the upload API at " + API);
     }
+
     console.info("[QueryX upload] reliable upload response received", { status: response.status, ok: response.ok });
     if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.detail || `Upload failed with status ${response.status}`);
+        throw new Error(await _readErrorDetail(response, "Upload failed"));
     }
+
     const result = await response.json();
     console.info("[QueryX upload] indexing completed", result);
     return result;
@@ -69,7 +87,6 @@ async function cancelDocumentUpload(uploadId) {
         method: "POST"
     });
 }
-
 
 async function uploadDocumentStream(file, onProgress) {
     const formData = new FormData();
@@ -94,8 +111,7 @@ async function uploadDocumentStream(file, onProgress) {
     console.info("[QueryX upload] backend response received", { status: response.status, ok: response.ok });
 
     if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.detail || `Upload failed with status ${response.status}`);
+        throw new Error(await _readErrorDetail(response, "Upload failed"));
     }
 
     const reader = response.body.getReader();
@@ -109,7 +125,7 @@ async function uploadDocumentStream(file, onProgress) {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop(); // keep last unfinished piece
+        buffer = lines.pop();
 
         for (const line of lines) {
             const trimmed = line.trim();
@@ -143,7 +159,6 @@ async function uploadDocumentStream(file, onProgress) {
     return finalResult;
 }
 
-
 async function streamAnswer(question, onChunk) {
     const response = await fetch(`${API}/chat/stream`, {
         method: "POST",
@@ -157,7 +172,7 @@ async function streamAnswer(question, onChunk) {
     });
 
     if (!response.ok) {
-        throw new Error("Streaming request failed");
+        throw new Error(await _readErrorDetail(response, "Streaming request failed"));
     }
 
     const reader = response.body.getReader();
@@ -165,7 +180,6 @@ async function streamAnswer(question, onChunk) {
 
     while (true) {
         const { done, value } = await reader.read();
-
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
@@ -173,33 +187,37 @@ async function streamAnswer(question, onChunk) {
     }
 }
 
-
-async function askQuestion(question){
-
-    const response = await fetch(`${API}/chat`,{
-        method:"POST",
-        headers:{
-            "Content-Type":"application/json"
+async function askQuestion(question) {
+    const response = await fetch(`${API}/chat`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
         },
-        body:JSON.stringify({
+        body: JSON.stringify({
             session_id: getSessionId(),
             question: question
         })
     });
+    if (!response.ok) {
+        throw new Error(await _readErrorDetail(response, "Chat request failed"));
+    }
     return response.json();
 }
 
-
-async function getDocuments(){
-
+async function getDocuments() {
     const response = await fetch(`${API}/documents`);
+    if (!response.ok) {
+        throw new Error(await _readErrorDetail(response, "Failed to load documents"));
+    }
     return response.json();
 }
 
-
-async function deleteDocument(id){
-
-    await fetch(`${API}/documents/${id}`,{
-        method:"DELETE"
+async function deleteDocument(id) {
+    const response = await fetch(`${API}/documents/${encodeURIComponent(id)}`, {
+        method: "DELETE"
     });
+    if (!response.ok) {
+        throw new Error(await _readErrorDetail(response, "Failed to delete document"));
+    }
+    return response.json();
 }
