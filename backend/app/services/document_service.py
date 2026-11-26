@@ -8,7 +8,7 @@ from time import perf_counter
 from fastapi import HTTPException
 from qdrant_client.http.models import FieldCondition, Filter, MatchAny, MatchValue
 
-from app.core.config import COLLECTION_NAME, UPLOAD_DIR
+from app.core.config import COLLECTION_NAME
 from app.core.logger import logger
 from app.db.qdrant import get_qdrant_client
 from app.rag.bm25_index import bm25_index
@@ -117,7 +117,7 @@ def delete_documents(document_ids: list[str], rebuild_bm25: bool = True) -> dict
 
 
 def clear_all_documents() -> dict:
-    """Delete all points in the Qdrant collection, clear BM25, and remove temp uploads."""
+    """Delete all points in the Qdrant collection and clear BM25."""
     qdrant_client = get_qdrant_client()
     qdrant_client.delete(
         collection_name=COLLECTION_NAME,
@@ -125,15 +125,7 @@ def clear_all_documents() -> dict:
     )
     bm25_index.clear()
 
-    if UPLOAD_DIR.exists():
-        for filepath in UPLOAD_DIR.iterdir():
-            if filepath.is_file():
-                try:
-                    filepath.unlink(missing_ok=True)
-                except OSError as exc:
-                    logger.warning("DOCUMENT | failed to remove temp upload | path=%s | error=%s", filepath, exc)
-
-    logger.info("DOCUMENT | cleared all documents from Qdrant, BM25, and temp uploads")
+    logger.info("DOCUMENT | cleared all documents from Qdrant and BM25")
     return {"cleared": True}
 
 

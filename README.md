@@ -63,14 +63,14 @@ QueryX/
 │
 ├── backend/
 │   ├── app/
-│   │   ├── api/            # FastAPI route handlers
+│   │   ├── api/            # FastAPI route handlers (upload, chat, search, documents)
 │   │   ├── core/           # Configuration and logging
 │   │   ├── db/             # Qdrant client & collection management
 │   │   ├── llm/            # Groq client & prompt builder
 │   │   ├── memory/         # Session conversation memory
 │   │   ├── rag/            # Chunker, embeddings, BM25, RRF, hybrid pipeline
 │   │   ├── schemas/        # Pydantic request/response models
-│   │   ├── services/       # Document, search, and cleanup services
+│   │   ├── services/       # Document lifecycle service
 │   │   ├── utils/          # PDF and text helpers
 │   │   └── main.py         # FastAPI application entrypoint
 │   ├── tests/              # Unit tests
@@ -93,7 +93,6 @@ QueryX/
 │   ├── index.html
 │   └── nginx.conf
 │
-├── uploads/                # Ignored local upload placeholder (.gitkeep)
 ├── .gitignore
 └── docker-compose.yml
 ```

@@ -13,7 +13,6 @@ from app.core.logger import logger
 from app.db.qdrant import ensure_collection
 from app.rag.bm25_index import bm25_index
 from app.rag.embeddings import preload_embedding_model
-from app.services.cleanup_service import cleanup_service
 from app.services.document_service import clear_all_documents
 
 
@@ -24,12 +23,10 @@ async def lifespan(app: FastAPI):
         clear_all_documents()
     else:
         bm25_index.rebuild()
-    cleanup_service.start()
     threading.Thread(target=preload_embedding_model, daemon=True, name="EmbeddingPreload").start()
     try:
         yield
     finally:
-        cleanup_service.stop()
         if EPHEMERAL_DOCUMENTS:
             try:
                 clear_all_documents()

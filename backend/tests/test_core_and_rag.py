@@ -9,7 +9,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app.llm.prompt import build_prompt
 from app.main import app
-from app.memory.manager import MemoryManager
+from app.memory import MemoryManager, MemoryStore
 from app.rag.bm25_index import BM25Index
 from app.rag.chunker import ChunkingCancelled, chunk_text
 from app.rag.rrf import reciprocal_rank_fusion
@@ -93,7 +93,7 @@ class TestQueryXModules(unittest.TestCase):
         mock_rebuild.assert_called_once()
 
     def test_memory_and_prompt_builder(self):
-        mgr = MemoryManager()
+        mgr = MemoryManager(MemoryStore())
         sid = "test-session-1"
         mgr.add_user(sid, "Hi")
         mgr.add_assistant(sid, "Hello")

@@ -1,8 +1,25 @@
+from qdrant_client.models import FieldCondition, Filter, MatchValue
+
 from app.core.config import COLLECTION_NAME
 from app.db.qdrant import get_qdrant_client
 from app.rag.embeddings import embed_text
-from app.rag.filters import build_filter
 from app.schemas.retrieval import RetrievedChunk
+
+
+def build_filter(document_ids: list[str] | None = None) -> Filter | None:
+    """Build a Qdrant filter restricting results to specific document IDs."""
+    if not document_ids:
+        return None
+
+    return Filter(
+        should=[
+            FieldCondition(
+                key="document_id",
+                match=MatchValue(value=doc_id),
+            )
+            for doc_id in document_ids
+        ]
+    )
 
 
 def retrieve(
