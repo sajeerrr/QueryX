@@ -114,12 +114,13 @@ QueryX/
 ### Prerequisites
 
 - **Gemini API Key** (from [Google AI Studio](https://aistudio.google.com/))
-- **Docker** (for running Qdrant or the full containerized stack)
+- **Qdrant Cloud** cluster URL & API key (from [cloud.qdrant.io](https://cloud.qdrant.io/))
+- **Docker** (optional, for containerized deployment)
 - **Python 3.11+** (if running the backend locally)
 
 ### 1. Configure Environment Variables
 
-Copy the example environment file and add your Gemini API key:
+Copy the example environment file and add your Qdrant Cloud and Gemini credentials:
 
 ```bash
 cp backend/.env.example backend/.env
@@ -129,7 +130,8 @@ cp backend/.env.example backend/.env
 HOST=0.0.0.0
 PORT=8000
 
-QDRANT_URL=http://localhost:6333
+QDRANT_URL=https://your-cluster-id.aws.cloud.qdrant.io:6333
+QDRANT_API_KEY=your_qdrant_api_key
 COLLECTION_NAME=queryx_documents
 
 # Gemini API key (API_KEY is also supported)
@@ -145,7 +147,7 @@ EPHEMERAL_DOCUMENTS=true
 
 ### Option A: Run with Docker Compose
 
-`docker-compose.yml` starts **Qdrant**, **FastAPI Backend**, and **Nginx Frontend** together (and overrides `QDRANT_URL=http://qdrant:6333` automatically):
+`docker-compose.yml` starts **FastAPI Backend** and **Nginx Frontend**, connecting directly to your **Qdrant Cloud** cluster configured in `backend/.env`:
 
 ```bash
 docker compose up --build -d
@@ -165,13 +167,7 @@ docker compose down
 
 ### Option B: Run Locally (Development)
 
-1. **Start Qdrant** (if not already running):
-
-   ```bash
-   docker compose up -d qdrant
-   ```
-
-2. **Start the Backend**:
+1. **Start the Backend** (ensure `QDRANT_URL` and `QDRANT_API_KEY` are set in `backend/.env`):
 
    ```bash
    cd backend
@@ -186,7 +182,7 @@ docker compose down
    uvicorn app.main:app --reload
    ```
 
-3. **Open the Frontend**:
+2. **Open the Frontend**:
 
    Serve `frontend/index.html` using VS Code Live Server (e.g. `http://127.0.0.1:5500/frontend/index.html`) or any local static server. `frontend/js/api.js` automatically detects local dev ports (`5500`, `5173`, `8080`, etc.) and forwards API calls to port `8000`.
 
@@ -198,7 +194,8 @@ docker compose down
 |----------|---------|-------------|
 | `HOST` | `0.0.0.0` | Uvicorn bind host |
 | `PORT` | `8000` | Uvicorn bind port |
-| `QDRANT_URL` | `http://localhost:6333` | Qdrant server URL |
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant Cloud cluster URL (or local Qdrant URL) |
+| `QDRANT_API_KEY` | — | Qdrant Cloud API key |
 | `COLLECTION_NAME` | `queryx_documents` | Qdrant collection name |
 | `GEMINI_API_KEY` / `API_KEY` | — | Gemini API key (**required** for chat & embeddings) |
 | `CHAT_MODEL` | `gemini-3.1-flash-lite` | Gemini chat completion model |

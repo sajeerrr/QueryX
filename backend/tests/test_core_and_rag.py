@@ -7,6 +7,9 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from qdrant_client.models import PayloadSchemaType
+
+from app.db import qdrant as qdrant_db
 from app.db.qdrant import ensure_collection
 from app.llm.prompt import build_prompt
 from app.main import app
@@ -104,6 +107,27 @@ class TestQueryXModules(unittest.TestCase):
 
         fake_client.delete_collection.assert_called_once_with("queryx_documents")
         fake_client.create_collection.assert_called_once()
+        fake_client.create_payload_index.assert_called_once_with(
+            collection_name="queryx_documents",
+            field_name="document_id",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+
+    def test_get_qdrant_client_passes_cloud_url_and_api_key(self):
+        fake_instance = MagicMock()
+        with patch("app.db.qdrant._client", None), \
+             patch("app.db.qdrant.QDRANT_URL", "https://cluster.aws.cloud.qdrant.io:6333"), \
+             patch("app.db.qdrant.QDRANT_API_KEY", "secret-qdrant-key"), \
+             patch("app.db.qdrant.QdrantClient", return_value=fake_instance) as mock_cls:
+            client = qdrant_db.get_qdrant_client()
+
+        self.assertIs(client, fake_instance)
+        mock_cls.assert_called_once_with(
+            url="https://cluster.aws.cloud.qdrant.io:6333",
+            api_key="secret-qdrant-key",
+            timeout=30,
+        )
+        fake_instance.get_collections.assert_called_once()
 
     def test_clear_all_documents_wipes_qdrant_and_bm25(self):
         fake_client = MagicMock()
