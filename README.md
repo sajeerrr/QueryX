@@ -101,6 +101,8 @@ QueryX/
 │   │   └── upload.js             # Upload progress & cancellation UI
 │   ├── .dockerignore
 │   ├── Dockerfile
+│   ├── favicon.ico
+│   ├── favicon.png
 │   ├── index.html
 │   └── nginx.conf
 ├── .gitignore
