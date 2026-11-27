@@ -15,20 +15,22 @@ function showProcessingView(fileName) {
     const row = document.createElement("div");
     row.className = "message ai processing-message";
     row.id = "processingMessage";
-    row.innerHTML = `
-        <div class="msg-avatar ai">Q</div>
-        <div class="bubble processing-bubble">
-            <div class="processing-header">
-                <div class="processing-spinner"></div>
-                <strong>File is processing…</strong>
-            </div>
-            <p class="processing-sub">Please wait while <span class="processing-file-name"></span> is prepared.</p>
-            <div class="processing-bar-wrap">
-                <div class="processing-bar" id="chatProgressBar"></div>
-            </div>
-            <button type="button" class="stop-processing-btn" id="stopProcessingBtn">Stop processing</button>
-        </div>
-    `;
+    row.innerHTML =
+        `<div class="bubble processing-bubble">` +
+            `<div class="processing-header">` +
+                `<div class="processing-spinner"></div>` +
+                `<strong>Processing Document…</strong>` +
+            `</div>` +
+            `<p class="processing-sub">Preparing <span class="processing-file-name"></span> for search and chat.</p>` +
+            `<div class="processing-progress-meta">` +
+                `<span id="processingStageText">Extracting text…</span>` +
+                `<span id="processingPercentText">12%</span>` +
+            `</div>` +
+            `<div class="processing-bar-wrap">` +
+                `<div class="processing-bar" id="chatProgressBar"></div>` +
+            `</div>` +
+            `<button type="button" class="stop-processing-btn" id="stopProcessingBtn">Stop processing</button>` +
+        `</div>`;
     const stopBtn = row.querySelector("#stopProcessingBtn");
     row.querySelector(".processing-file-name").textContent = fileName || "your file";
     stopBtn?.addEventListener("click", () => {
@@ -95,21 +97,18 @@ function showUploadFailureView(fileName, error) {
     if (!messages) return;
     messages.innerHTML = "";
 
-    const row = document.createElement("div");
-    row.className = "message ai";
-    row.innerHTML = `
-        <div class="msg-avatar ai">Q</div>
-        <div class="bubble processing-bubble">
-            <div class="processing-header"><strong>Upload could not start</strong></div>
-            <p class="processing-sub"></p>
-            <button type="button" class="starter-chip" id="retryUploadBtn">Choose a PDF and try again</button>
-        </div>
-    `;
-    row.querySelector(".processing-sub").textContent = `${fileName}: ${error}`;
-    row.querySelector("#retryUploadBtn").addEventListener("click", () => {
+    const card = document.createElement("div");
+    card.className = "welcome-card";
+    card.innerHTML =
+        `<div class="welcome-icon-wrap" style="background:var(--red-bg);color:var(--red);">!</div>` +
+        `<h3 class="welcome-title">Upload could not start</h3>` +
+        `<p class="welcome-sub"></p>` +
+        `<button type="button" class="starter-chip" id="retryUploadBtn">Choose a PDF and try again</button>`;
+    card.querySelector(".welcome-sub").textContent = `${fileName}: ${error}`;
+    card.querySelector("#retryUploadBtn").addEventListener("click", () => {
         document.getElementById("fileInput")?.click();
     });
-    messages.appendChild(row);
+    messages.appendChild(card);
 }
 
 // Helper to fill input and trigger send on starter chip click
@@ -227,14 +226,22 @@ window.startUpload = async function(file) {
     if (chatBarInit) chatBarInit.style.width = visualProgress + "%";
     const processingTicker = setInterval(() => {
         visualProgress = Math.min(visualProgress + (visualProgress < 70 ? 8 : 1.5), 90);
-        if (progressBar) progressBar.style.width = visualProgress + "%";
+        const pct = Math.round(visualProgress);
+        if (progressBar) progressBar.style.width = pct + "%";
         const chatBar = document.getElementById("chatProgressBar");
-        if (chatBar) chatBar.style.width = visualProgress + "%";
+        if (chatBar) chatBar.style.width = pct + "%";
+
+        const stageText = document.getElementById("processingStageText");
+        const percentText = document.getElementById("processingPercentText");
+        if (stageText) {
+            stageText.textContent = pct < 40 ? "Extracting text…" : pct < 70 ? "Generating embeddings…" : "Indexing in Qdrant…";
+        }
+        if (percentText) percentText.textContent = pct + "%";
 
         if (typeof _fileCardMap !== "undefined") {
             const card = _fileCardMap.get(tempId);
             const meta = card?.querySelector(".file-bubble-meta");
-            if (meta) meta.textContent = visualProgress < 70 ? "Processing…" : "Indexing…";
+            if (meta) meta.textContent = pct < 70 ? "Processing…" : "Indexing…";
         }
     }, 200);
 
@@ -246,6 +253,10 @@ window.startUpload = async function(file) {
         if (progressBar) progressBar.style.width = "100%";
         const chatBar = document.getElementById("chatProgressBar");
         if (chatBar) chatBar.style.width = "100%";
+        const stageText = document.getElementById("processingStageText");
+        const percentText = document.getElementById("processingPercentText");
+        if (stageText) stageText.textContent = "Complete";
+        if (percentText) percentText.textContent = "100%";
 
         setTimeout(() => {
             if (dropProgress) dropProgress.classList.remove("visible");
